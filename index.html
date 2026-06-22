@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Date-A-Tsundere Dashboard</title>
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800;900&family=Nunito:wght@800;900&display=swap");
+
+  :root {
+    --blue: #315fe8;
+    --blue-2: #244fd0;
+    --blue-dark: #17359b;
+    --blue-soft: #dff0ff;
+    --pink: #ff55ad;
+    --pink-2: #ff92cf;
+    --mint: #47efc3;
+    --green: #8fff9f;
+    --ink: #25479f;
+    --paper: #fbfdff;
+    --shadow: 0 5px 0 rgba(30, 68, 183, .42), 0 14px 28px rgba(24, 57, 148, .2);
+  }
+
+  * { box-sizing: border-box; }
+
+  html,
+  body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: #071331;
+    color: var(--ink);
+    font-family: "M PLUS Rounded 1c", "Nunito", "Arial Rounded MT Bold", "Yu Gothic", system-ui, sans-serif;
+  }
+
+  button {
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:focus-visible {
+    outline: 4px solid var(--pink-2);
+    outline-offset: 3px;
+  }
+
+  .screen-wrap {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    background:
+      radial-gradient(circle at 50% 45%, rgba(47, 95, 220, .24), transparent 48%),
+      #071331;
+  }
+
+  .game {
+    position: relative;
+    width: min(100vw, calc(100vh * 16 / 9), 1200px);
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    isolation: isolate;
+    background: #8bd0ff url("assets/background-stage.png") center / cover no-repeat;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, .16), 0 26px 72px rgba(0, 0, 0, .42);
+  }
+
+  .game::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+      linear-gradient(90deg, rgba(247, 252, 255, .34) 0 28%, transparent 46%),
+      linear-gradient(180deg, rgba(255, 255, 255, .08), transparent 38%);
+  }
+
+  .game.shake { animation: screen-shake .28s ease; }
+
+  .notebook {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 28%;
+    z-index: 2;
+    border-right: 3px solid rgba(47, 95, 220, .25);
+    clip-path: polygon(0 0, 94% 0, 100% 100%, 0 100%);
+    background:
+      linear-gradient(rgba(62, 100, 200, .24) 1px, transparent 1px) 0 0 / 16px 16px,
+      linear-gradient(90deg, rgba(62, 100, 200, .24) 1px, transparent 1px) 0 0 / 16px 16px,
+      linear-gradient(90deg, rgba(255, 255, 255, .99), rgba(248, 252, 255, .92));
+  }
+
+  .notebook::before {
+    content: "Season 01  Yui Load - Dreamweave";
+    position: absolute;
+    left: -18px;
+    top: 0;
+    height: 100%;
+    writing-mode: vertical-rl;
+    color: rgba(38, 70, 170, .46);
+    font-size: clamp(25px, 3.25vw, 43px);
+    font-weight: 900;
+    line-height: .82;
+    text-shadow: 2px 0 rgba(255, 255, 255, .9);
+  }
+
+  .notebook::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 8.4%;
+    height: 100%;
+    border-right: 4px dashed rgba(255, 82, 174, .55);
+  }
+
+  .profile {
+    position: absolute;
+    left: 5.35%;
+    top: 4.75%;
+    z-index: 7;
+    display: flex;
+    align-items: center;
+    gap: .38em;
+    max-width: 19.6%;
+  }
+
+  .avatar-btn {
+    width: clamp(43px, 5vw, 60px);
+    aspect-ratio: 1;
+    flex: 0 0 auto;
+    padding: 0;
+    overflow: hidden;
+    border: 4px solid var(--blue);
+    border-radius: 50%;
+    background: #ffd6ea;
+    box-shadow: 0 3px 0 var(--blue-dark);
+    transition: transform .14s ease, filter .14s ease;
+  }
+
+  .avatar-btn:hover,
+  .chip-btn:hover,
+  .round-btn:hover,
+  .tab-card:hover,
+  .lesson-cta:hover { transform: translateY(-2px); filter: brightness(1.04); }
+
+  .avatar-btn:active,
+  .chip-btn:active,
+  .round-btn:active,
+  .tab-card:active,
+  .lesson-cta:active { transform: translateY(2px); filter: brightness(.98); }
+
+  .avatar {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+  }
+
+  .name-line {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: .28em;
+    color: #284aa4;
+    font-size: clamp(13px, 1.32vw, 17px);
+    font-weight: 900;
+    line-height: 1.2;
+    text-shadow: 1px 1px #fff;
+    white-space: nowrap;
+  }
+
+  #username {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .username-input {
+    width: 10.8em;
+    max-width: 100%;
+    display: none;
+    border: 3px solid var(--blue);
+    border-radius: 8px;
+    background: #fff;
+    color: #284aa4;
+    font: inherit;
+    line-height: 1.2;
+    padding: .16em .35em;
+    box-shadow: 0 2px 0 #9cc3ff;
+  }
+
+  .name-line.editing #username { display: none; }
+  .name-line.editing .username-input { display: block; }
+
+  .edit-btn {
+    width: 1.5em;
+    height: 1.5em;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    border: 3px solid var(--blue);
+    border-radius: 7px;
+    background: #fff;
+    box-shadow: 0 2px 0 #9cc3ff;
+    color: var(--blue);
+    font-size: .78em;
+    transition: transform .14s ease, background .14s ease;
+  }
+
+  .profile-star {
+    position: absolute;
+    left: 23.25%;
+    top: 10.45%;
+    z-index: 7;
+    width: 4.15%;
+    aspect-ratio: 1;
+    color: #66ff9a;
+    filter: drop-shadow(0 3px 0 #3670d7);
+  }
+
+  .profile-star svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    fill: #fff;
+    stroke: currentColor;
+    stroke-linejoin: round;
+    stroke-width: 8;
+  }
+
+  .stat {
+    position: absolute;
+    left: 5.25%;
+    z-index: 7;
+    width: 22.6%;
+    height: 8.5%;
+    color: #284aa4;
+    overflow: visible;
+  }
+
+  .stat.energy { top: 16.9%; }
+  .stat.rank { top: 26.6%; }
+
+  .stat-label {
+    position: absolute;
+    left: 1.1%;
+    top: 1%;
+    color: #284aa4;
+    font-size: clamp(11px, 1.18vw, 15px);
+    font-weight: 900;
+    line-height: 1.05;
+    text-shadow: 2px 0 #fff, -2px 0 #fff, 0 -2px #fff, 0 2px #fff, 1px 2px #fff;
+    transform: rotate(-3deg);
+    transform-origin: left center;
+    white-space: nowrap;
+  }
+
+  .stat-number {
+    position: absolute;
+    left: -2.2%;
+    top: 34%;
+    z-index: 3;
+    color: var(--pink);
+    font-size: clamp(27px, 2.85vw, 37px);
+    font-weight: 900;
+    line-height: .82;
+    text-shadow: 3px 0 #fff, -3px 0 #fff, 0 -3px #fff, 0 3px #fff, 2px 2px #fff, -2px 2px #fff, 2px -2px #fff, -2px -2px #fff;
+    transform: rotate(-3deg);
+    transform-origin: center;
+  }
+
+  .rank .stat-number {
+    left: -1.2%;
+    color: #69ef8b;
+  }
+
+  .bar-wrap {
+    position: absolute;
+    left: 19.5%;
+    top: 43.5%;
+    width: 80%;
+    height: 32%;
+    overflow: hidden;
+    border: 4px solid var(--blue);
+    border-radius: 999px;
+    background: #173aa7;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, .22), 0 2px 0 #d9e9ff;
+    transform: rotate(-3deg);
+    transform-origin: left center;
+  }
+
+  .bar-fill {
+    width: calc(var(--value) * 1%);
+    height: 100%;
+    border-radius: inherit;
+    box-shadow: inset 0 2px rgba(255, 255, 255, .45);
+  }
+
+  .energy .bar-fill { background: linear-gradient(90deg, #ff44a6, #ff7ccb); }
+  .rank .bar-fill { background: linear-gradient(90deg, #41edbf, #93ff9c); }
+
+  .bar-text {
+    position: absolute;
+    top: 50%;
+    right: 27%;
+    z-index: 2;
+    width: 28%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #fff;
+    font-size: clamp(11px, 1.22vw, 16px);
+    font-weight: 900;
+    line-height: 1;
+    text-shadow: 0 2px #153386;
+    transform: translateY(-50%);
+    white-space: nowrap;
+  }
+
+  .mood-chip {
+    position: absolute;
+    left: 5.35%;
+    top: 31.4%;
+    z-index: 8;
+    display: none;
+    align-items: center;
+    gap: .42em;
+    max-width: 20%;
+    padding: .45% 1.1%;
+    border: 3px solid var(--blue);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .94);
+    box-shadow: 0 3px 0 rgba(31, 70, 184, .34);
+    color: #284aa4;
+    font-size: clamp(10px, .98vw, 13px);
+    font-weight: 900;
+    white-space: nowrap;
+  }
+
+  .mood-dot {
+    width: .85em;
+    height: .85em;
+    border-radius: 50%;
+    background: var(--pink);
+    box-shadow: 0 0 0 3px #ffd5ec;
+  }
+
+  .tab-card {
+    position: absolute;
+    left: 7%;
+    z-index: 7;
+    overflow: visible;
+    border: 4px solid var(--blue);
+    background: rgba(255, 255, 255, .97);
+    box-shadow: var(--shadow);
+    transition: transform .14s ease, filter .14s ease;
+  }
+
+  .tab-card .tab {
+    position: absolute;
+    left: 50%;
+    top: -23px;
+    height: 27px;
+    min-width: 90px;
+    display: grid;
+    place-items: center;
+    padding: 2px 18px;
+    border-radius: 18px 18px 5px 5px;
+    background: var(--blue);
+    box-shadow: inset 0 -2px 0 rgba(255, 255, 255, .42);
+    color: #fff;
+    font-size: clamp(10px, 1.08vw, 14px);
+    font-weight: 900;
+    line-height: 1;
+    transform: translateX(-50%);
+  }
+
+  .mission-card {
+    top: 43.3%;
+    width: 20.6%;
+    height: 15.6%;
+    display: flex;
+    align-items: center;
+    gap: .9em;
+    padding: 2.85% 1.55% 1.15% 1.85%;
+    border-radius: 25px;
+    transform: rotate(-1.4deg);
+  }
+
+  .mission-card:hover { transform: rotate(-1.4deg) translateY(-2px); }
+  .mission-card:active { transform: rotate(-1.4deg) translateY(2px); }
+
+  .mission-icon {
+    position: relative;
+    width: 23.5%;
+    aspect-ratio: .82;
+    flex: 0 0 auto;
+    border: 4px solid var(--blue);
+    border-radius: 6px;
+    background: #fff;
+    box-shadow: 3px 3px #d8e5ff;
+  }
+
+  .mission-icon::before {
+    content: "";
+    position: absolute;
+    left: 25%;
+    top: 21%;
+    right: 18%;
+    height: 4px;
+    background: var(--blue);
+    box-shadow: 0 13px var(--blue), 0 26px var(--blue);
+  }
+
+  .mission-text {
+    color: #284aa4;
+    font-size: clamp(11px, 1.05vw, 15px);
+    font-weight: 900;
+    line-height: 1.22;
+    text-align: left;
+  }
+
+  .pink-scribble {
+    position: absolute;
+    left: 20.5%;
+    top: 62.7%;
+    z-index: 4;
+    width: 5.2%;
+    height: 5.4%;
+    pointer-events: none;
+  }
+
+  .pink-scribble i {
+    position: absolute;
+    width: 5px;
+    height: 34px;
+    border-radius: 99px;
+    background: #ff4daf;
+    transform-origin: bottom center;
+  }
+
+  .pink-scribble i:nth-child(1) { left: 5%; top: 22%; transform: rotate(-34deg); }
+  .pink-scribble i:nth-child(2) { left: 41%; top: 0; transform: rotate(-4deg); }
+  .pink-scribble i:nth-child(3) { left: 72%; top: 22%; transform: rotate(32deg); }
+
+  .event-card {
+    top: 63%;
+    width: 22.7%;
+    height: 17.2%;
+    display: grid;
+    grid-template-columns: 37% 1fr;
+    align-items: center;
+    gap: .7em;
+    padding: .65% .75%;
+    border-radius: 20px;
+    transform: rotate(-1.7deg);
+  }
+
+  .event-card:hover { transform: rotate(-1.7deg) translateY(-2px); }
+  .event-card:active { transform: rotate(-1.7deg) translateY(2px); }
+
+  .event-card .tab {
+    left: 22%;
+    top: -21px;
+    min-width: 78px;
+    background: var(--pink);
+    transform: translateX(-50%) rotate(-8deg);
+  }
+
+  .event-thumb {
+    width: 100%;
+    height: 96%;
+    border: 3px solid var(--blue);
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 2px 3px #d7e5ff;
+    object-fit: cover;
+    object-position: 50% 45%;
+  }
+
+  .event-copy {
+    color: #284aa4;
+    font-size: clamp(10px, 1vw, 13px);
+    font-weight: 900;
+    line-height: 1.15;
+    text-align: left;
+  }
+
+  .event-copy span {
+    display: inline-block;
+    margin-top: .18em;
+    color: #eb4a9a;
+    text-shadow: 1px 1px #fff;
+  }
+
+  .character-zone {
+    position: absolute;
+    left: 28.8%;
+    top: 1.8%;
+    z-index: 5;
+    width: 31.5%;
+    height: 92%;
+    display: grid;
+    place-items: end center;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .character-btn {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: end center;
+    pointer-events: auto;
+    filter: drop-shadow(0 13px 0 rgba(20, 56, 145, .12)) drop-shadow(0 18px 22px rgba(20, 56, 145, .26));
+    animation: character-idle 4.5s ease-in-out infinite;
+    transition: transform .18s ease;
+  }
+
+  .character-btn:hover { transform: translateY(-3px); }
+  .character-btn:active { transform: translateY(2px); }
+  .character-btn.bump { animation: bump .35s ease, character-idle 4.5s ease-in-out .35s infinite; }
+
+  .character-img {
+    width: auto;
+    height: 98%;
+    max-width: none;
+    max-height: none;
+    display: block;
+    opacity: 1;
+    mix-blend-mode: normal;
+    object-fit: contain;
+    object-position: bottom center;
+    filter: drop-shadow(0 8px 0 rgba(49, 95, 232, .14));
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  .bubble {
+    position: absolute;
+    left: 60.5%;
+    top: 14.5%;
+    z-index: 8;
+    width: 28%;
+    min-height: 14.2%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.55% 2.35%;
+    border: 3px solid rgba(122, 168, 235, .68);
+    border-radius: 48px 58px 49px 58px;
+    background: #fff;
+    box-shadow: 0 4px 0 rgba(122, 168, 235, .32), 0 12px 26px rgba(20, 56, 145, .12);
+    transform: rotate(-2deg);
+  }
+
+  .bubble::after {
+    content: "";
+    position: absolute;
+    left: 28%;
+    bottom: -31px;
+    width: 66px;
+    height: 42px;
+    border-left: 3px solid rgba(122, 168, 235, .68);
+    border-bottom: 3px solid rgba(122, 168, 235, .68);
+    background: #fff;
+    clip-path: polygon(0 0, 100% 0, 15% 100%);
+    transform: rotate(15deg);
+  }
+
+  .bubble.pop { animation: pop .24s ease; }
+
+  .bubble-text {
+    position: relative;
+    z-index: 1;
+    width: 74%;
+    min-width: 220px;
+    color: #3150aa;
+    font-size: clamp(13px, 1.36vw, 18px);
+    font-weight: 900;
+    line-height: 1.28;
+    text-align: left;
+    white-space: pre-line;
+  }
+
+  .currency {
+    position: absolute;
+    top: 2.2%;
+    z-index: 10;
+    height: 5.65%;
+    transform: rotate(-2.4deg);
+    transform-origin: left center;
+  }
+
+  .currency.coin { left: 66.8%; width: 12.55%; }
+  .currency.gem { left: 79.4%; width: 12.75%; }
+
+  .currency-pill {
+    position: absolute;
+    left: 13.5%;
+    top: 15%;
+    width: 86.5%;
+    height: 70%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 9% 0 22%;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #396cf0, #2554d9);
+    box-shadow: inset 0 3px rgba(255, 255, 255, .26), 0 3px 0 var(--blue-dark);
+    color: #fff;
+    font-size: clamp(17px, 1.65vw, 22px);
+    font-weight: 900;
+    transform: skewX(-10deg);
+  }
+
+  .currency-pill span {
+    display: block;
+    line-height: 1;
+    text-shadow: 0 2px #173996;
+    transform: skewX(10deg);
+  }
+
+  .currency-icon {
+    position: absolute;
+    left: 0;
+    top: -14%;
+    z-index: 2;
+    width: 31%;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    border: 3px solid var(--blue);
+    background: #fff;
+    filter: drop-shadow(0 3px 0 rgba(19, 54, 158, .45));
+    pointer-events: none;
+  }
+
+  .coin-mark {
+    border-radius: 50%;
+    background: radial-gradient(circle at 32% 25%, #fff6a4 0 17%, #ffd33e 18% 48%, #d7931b 49% 100%);
+    box-shadow: inset 0 0 0 3px #815012, inset 0 0 0 6px #ffe16a;
+    color: #8a570c;
+    font-size: clamp(13px, 1.35vw, 18px);
+    font-weight: 900;
+    line-height: 1;
+    text-shadow: 0 1px #fff3a4;
+  }
+
+  .gem-mark {
+    top: -19%;
+    width: 34%;
+    border: 0;
+    background: transparent;
+    filter: drop-shadow(0 3px 0 rgba(19, 54, 158, .45));
+  }
+
+  .gem-mark::before {
+    content: "";
+    width: 88%;
+    height: 78%;
+    display: block;
+    clip-path: polygon(50% 0, 92% 30%, 50% 100%, 8% 30%);
+    background: linear-gradient(135deg, #f4ffff 0 16%, #84f3ff 17% 50%, #37bdf2 51% 100%);
+    box-shadow: inset 0 0 0 4px #fff, inset 0 -10px 0 rgba(49, 95, 232, .3);
+  }
+
+  .side-buttons {
+    position: absolute;
+    right: .85%;
+    top: 2.7%;
+    z-index: 12;
+    width: 6.8%;
+    height: 38.5%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .round-btn {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    transition: transform .14s ease, filter .14s ease;
+  }
+
+  .round-disc {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border: 4px solid #fff;
+    border-radius: 50%;
+    background: radial-gradient(circle at 28% 18%, #7acaff 0 12%, #4575ff 13% 56%, #2455d7 57% 100%);
+    box-shadow: inset 0 0 0 3px #6da0ff, 0 4px 0 rgba(19, 54, 158, .38), 0 9px 16px rgba(19, 54, 158, .2);
+    color: #fff;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .quick-label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 10%;
+    z-index: 2;
+    color: #fff;
+    font-size: clamp(8px, .82vw, 11px);
+    font-weight: 900;
+    line-height: 1;
+    text-align: center;
+    text-shadow: 0 2px #173996, 1px 1px #173996;
+    white-space: nowrap;
+  }
+
+  .menu-lines {
+    position: absolute;
+    left: 24%;
+    top: 20%;
+    width: 54%;
+    height: 8%;
+    border-radius: 99px;
+    background: #fff;
+    box-shadow: 0 14px 0 #fff, 0 28px 0 #fff;
+    transform: rotate(-5deg);
+  }
+
+  .gift-box {
+    position: absolute;
+    left: 24%;
+    top: 31%;
+    width: 52%;
+    height: 34%;
+    border: 4px solid #fff;
+    border-radius: 5px;
+  }
+
+  .gift-box::before,
+  .gift-box::after {
+    content: "";
+    position: absolute;
+    background: #fff;
+  }
+
+  .gift-box::before {
+    left: 43%;
+    top: -4px;
+    width: 14%;
+    height: calc(100% + 8px);
+  }
+
+  .gift-box::after {
+    left: -4px;
+    top: 35%;
+    width: calc(100% + 8px);
+    height: 14%;
+  }
+
+  .gift-bow::before,
+  .gift-bow::after {
+    content: "";
+    position: absolute;
+    top: 13%;
+    width: 27%;
+    height: 18%;
+    border: 4px solid #fff;
+    border-radius: 50% 50% 10% 50%;
+  }
+
+  .gift-bow::before {
+    left: 21%;
+    transform: rotate(22deg);
+  }
+
+  .gift-bow::after {
+    right: 21%;
+    transform: scaleX(-1) rotate(22deg);
+  }
+
+  .mail-icon {
+    position: absolute;
+    left: 22%;
+    top: 24%;
+    width: 56%;
+    height: 36%;
+    border: 4px solid #fff;
+    border-radius: 5px;
+    transform: rotate(-8deg);
+  }
+
+  .mail-icon::before,
+  .mail-icon::after {
+    content: "";
+    position: absolute;
+    top: 5%;
+    width: 52%;
+    height: 4px;
+    border-radius: 99px;
+    background: #fff;
+    transform-origin: left center;
+  }
+
+  .mail-icon::before {
+    left: 0;
+    transform: rotate(30deg);
+  }
+
+  .mail-icon::after {
+    right: -3px;
+    transform: scaleX(-1) rotate(30deg);
+  }
+
+  .mail-star {
+    position: absolute;
+    right: 22%;
+    top: 15%;
+    color: #fff;
+    font-size: clamp(10px, 1vw, 15px);
+    line-height: 1;
+    text-shadow: 0 2px #173996;
+  }
+
+  .lesson-cta {
+    position: absolute;
+    right: 1.35%;
+    bottom: 18.5%;
+    z-index: 9;
+    width: 19.2%;
+    height: 26.5%;
+    filter: drop-shadow(0 8px 0 rgba(34, 71, 178, .45));
+    transition: transform .16s ease, filter .16s ease;
+  }
+
+  .lesson-cta .blob {
+    position: absolute;
+    inset: 4% 2%;
+    border: 5px solid var(--blue);
+    border-radius: 34px;
+    background: #fff;
+    box-shadow: inset 0 0 0 7px #ff78c4, 0 9px 18px rgba(0, 0, 0, .12);
+    transform: rotate(-3deg);
+  }
+
+  .lesson-cta .blob::before {
+    content: "";
+    position: absolute;
+    left: -8%;
+    bottom: 17%;
+    width: 22%;
+    height: 38%;
+    border: 5px solid var(--blue);
+    border-right: 0;
+    border-radius: 28px 0 0 28px;
+    background: #ffd0e8;
+    transform: rotate(8deg);
+  }
+
+  .lesson-cta .blob::after {
+    content: "";
+    position: absolute;
+    right: -8%;
+    top: 22%;
+    width: 23%;
+    height: 22%;
+    border: 5px solid var(--blue);
+    border-left: 0;
+    border-radius: 0 26px 26px 0;
+    background: #ff76bf;
+    transform: rotate(8deg);
+  }
+
+  .lesson-text {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--blue);
+    font-size: clamp(36px, 5.25vw, 70px);
+    font-weight: 900;
+    letter-spacing: 0;
+    line-height: .88;
+    text-align: center;
+    text-shadow: 3px 3px #fff, -2px -2px #fff, 0 4px #ffd8f0;
+  }
+
+  .lesson-text small {
+    display: block;
+    color: #ff55ac;
+    font-size: clamp(13px, 1.42vw, 19px);
+    letter-spacing: 0;
+    text-shadow: 2px 2px #fff;
+  }
+
+  .pencil {
+    position: absolute;
+    right: -.5%;
+    bottom: -4%;
+    width: 17%;
+    height: 17%;
+    border: 4px solid var(--blue);
+    border-radius: 99px;
+    background: #31c7df;
+    box-shadow: 0 3px 0 var(--blue-dark);
+    transform: rotate(-40deg);
+  }
+
+  .starbit {
+    position: absolute;
+    color: #fff;
+    font-size: clamp(20px, 2.15vw, 32px);
+    text-shadow: 2px 2px var(--blue), -2px -2px var(--blue), 0 3px var(--blue);
+    pointer-events: none;
+  }
+
+  .s1 { left: 0; top: 2%; }
+  .s2 { right: -1%; top: 8%; }
+  .s3 { left: 7%; bottom: 0; }
+
+  .bottom-nav {
+    position: absolute;
+    left: 4%;
+    right: 2.1%;
+    bottom: 3.8%;
+    z-index: 14;
+    height: 7.75%;
+    display: grid;
+    grid-template-columns: 1.05fr 1fr 1fr 1fr 1fr;
+    overflow: hidden;
+    border: 4px solid var(--blue);
+    border-radius: 27px;
+    background: #fff;
+    box-shadow: 0 6px 0 rgba(31, 70, 184, .45), 0 13px 25px rgba(0, 0, 0, .12);
+  }
+
+  .nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    border-right: 2px solid rgba(49, 95, 232, .42);
+    background: #fff;
+    color: #284aa4;
+    font-size: clamp(15px, 1.65vw, 24px);
+    font-weight: 900;
+    line-height: 1;
+    text-shadow: 1px 1px #fff;
+    transition: background .14s ease, color .14s ease, transform .14s ease;
+  }
+
+  .nav-btn:last-child { border-right: 0; }
+  .nav-btn.active { background: var(--blue); color: #fff; text-shadow: 0 2px var(--blue-dark); }
+  .nav-btn:hover { background: #eef6ff; transform: translateY(-1px); }
+  .nav-btn.active:hover { background: var(--blue); }
+  .nav-btn:active { transform: translateY(2px); }
+
+  .fx-field {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .fx {
+    position: absolute;
+    color: var(--pink);
+    font-weight: 900;
+    text-shadow: 2px 2px #fff, 0 3px var(--blue);
+    animation: float-up .72s ease-out forwards;
+  }
+
+  .toast {
+    position: absolute;
+    left: 50%;
+    bottom: 13.4%;
+    z-index: 40;
+    max-width: 60%;
+    padding: .7% 1.4%;
+    border: 3px solid var(--blue);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .96);
+    box-shadow: 0 4px 0 rgba(31, 70, 184, .34);
+    color: #284aa4;
+    font-size: clamp(11px, 1.05vw, 14px);
+    font-weight: 900;
+    opacity: 0;
+    text-align: center;
+    transform: translate(-50%, 10px);
+    transition: opacity .16s ease, transform .16s ease;
+    pointer-events: none;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  @keyframes character-idle {
+    0%, 100% { translate: 0 0; }
+    50% { translate: 0 -5px; }
+  }
+
+  @keyframes float-up {
+    from { opacity: 1; transform: translateY(0) scale(.8) rotate(-8deg); }
+    to { opacity: 0; transform: translateY(-70px) scale(1.25) rotate(12deg); }
+  }
+
+  @keyframes pop {
+    0% { scale: .96; }
+    70% { scale: 1.03; }
+    100% { scale: 1; }
+  }
+
+  @keyframes bump {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    55% { transform: translateX(4px); }
+  }
+
+  @keyframes screen-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    50% { transform: translateX(4px); }
+    75% { transform: translateX(-2px); }
+  }
+
+  @media (max-width: 760px) {
+    .game {
+      width: 100vw;
+      height: auto;
+    }
+
+    .mood-chip { display: none; }
+    .bubble { top: 14%; width: 31%; }
+    .bottom-nav { left: 3.4%; right: 1.7%; }
+    .nav-btn { font-size: clamp(12px, 3vw, 18px); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: .001ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: .001ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="screen-wrap">
+  <main id="game" class="game" aria-label="Date-A-Tsundere main dashboard">
+    <section class="notebook" aria-hidden="true"></section>
+
+    <div class="profile">
+      <button class="avatar-btn" data-route="/profile" title="Open profile">
+        <img class="avatar" src="assets/profile-avatar.png" alt="Player profile avatar">
+      </button>
+      <div class="name-line">
+        <span id="username">mennminnmiiii</span>
+        <input id="usernameInput" class="username-input" aria-label="Username" maxlength="18" autocomplete="off">
+        <button class="edit-btn" data-action="edit-name" title="Edit username" aria-label="Edit username">✎</button>
+      </div>
+    </div>
+
+    <div class="profile-star" aria-hidden="true">
+      <svg viewBox="0 0 100 100"><path d="M50 7 61 35 91 36 67 55 76 86 50 68 24 86 33 55 9 36 39 35z"></path></svg>
+    </div>
+
+    <section class="stat energy" aria-label="Stamina status">
+      <div class="stat-label">スタミナ</div>
+      <div id="staminaNumber" class="stat-number">12</div>
+      <div class="bar-wrap" style="--value:60"><div class="bar-fill"></div><div id="staminaText" class="bar-text">6/10</div></div>
+    </section>
+
+    <section class="stat rank" aria-label="Producer rank status">
+      <div class="stat-label">プロデューサーランク</div>
+      <div id="rankNumber" class="stat-number">4</div>
+      <div class="bar-wrap" style="--value:30"><div class="bar-fill"></div><div id="rankText" class="bar-text">3/10</div></div>
+    </section>
+
+    <div class="mood-chip" aria-label="Current mood">
+      <span class="mood-dot" aria-hidden="true"></span>
+      <span id="moodText">機嫌: ふつう</span>
+    </div>
+
+    <button class="tab-card mission-card" data-route="/mission" aria-label="Mission: raise lesson level to 20">
+      <div class="tab">ミッション</div>
+      <div class="mission-icon" aria-hidden="true"></div>
+      <div class="mission-text">授業を受けてレベルを<br>20まで上げよう</div>
+    </button>
+
+    <div class="pink-scribble" aria-hidden="true"><i></i><i></i><i></i></div>
+
+    <button class="tab-card event-card" data-route="/event" aria-label="Event story">
+      <div class="tab">イベント</div>
+      <img class="event-thumb" src="assets/new-story-thumb.png" alt="Event preview">
+      <div class="event-copy">新しいイベント<br><span>Event:01</span></div>
+    </button>
+
+    <section class="character-zone">
+      <button id="characterBtn" class="character-btn" data-action="character" aria-label="Talk to Yui">
+        <img id="characterImg" class="character-img" src="assets/main-character.png" alt="Yui, the tsundere heroine">
+      </button>
+    </section>
+
+    <aside class="bubble" aria-live="polite">
+      <div id="dialogue" class="bubble-text">私は、目立たない。
+でも、誰より必要とされてる。</div>
+    </aside>
+
+    <section class="currency coin" aria-label="Coin currency">
+      <span class="currency-icon coin-mark" aria-hidden="true">$</span>
+      <div class="currency-pill"><span id="coinCount">50</span></div>
+    </section>
+
+    <section class="currency gem" aria-label="Premium currency">
+      <span class="currency-icon gem-mark" aria-hidden="true"></span>
+      <div class="currency-pill"><span id="gemCount">50</span></div>
+    </section>
+
+    <nav class="side-buttons" aria-label="Quick actions">
+      <button class="round-btn" data-route="/menu" title="Menu" aria-label="Menu">
+        <span class="round-disc" aria-hidden="true">
+          <span class="menu-lines"></span>
+          <span class="quick-label">Menu</span>
+        </span>
+      </button>
+      <button class="round-btn" data-action="daily-gift" title="Daily present" aria-label="Daily present">
+        <span class="round-disc" aria-hidden="true">
+          <span class="gift-bow"></span>
+          <span class="gift-box"></span>
+          <span class="quick-label">Gift</span>
+        </span>
+      </button>
+      <button class="round-btn" data-route="/notice" title="Notices" aria-label="Notices">
+        <span class="round-disc" aria-hidden="true">
+          <span class="mail-icon"></span>
+          <span class="mail-star">★</span>
+          <span class="quick-label">Notice</span>
+        </span>
+      </button>
+    </nav>
+
+    <button class="lesson-cta" data-route="/lesson/01" aria-label="Open Event 01">
+      <span class="blob"></span>
+      <span class="lesson-text">Event<small>Event:01</small></span>
+      <span class="pencil"></span>
+      <span class="starbit s1">☆</span>
+      <span class="starbit s2">✦</span>
+      <span class="starbit s3">☆</span>
+    </button>
+
+    <nav class="bottom-nav" aria-label="Main navigation">
+      <button class="nav-btn active" data-route="/home" aria-current="page">Home</button>
+      <button class="nav-btn" data-route="/story">Story</button>
+      <button class="nav-btn" data-route="/chat">Chat</button>
+      <button class="nav-btn" data-route="/gacha">Gacha</button>
+      <button class="nav-btn" data-route="/shop">Shop</button>
+    </nav>
+
+    <div id="fxField" class="fx-field" aria-hidden="true"></div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </main>
+</div>
+
+<script>
+(() => {
+  const params = new URLSearchParams(location.search);
+  if (params.has("reset")) {
+    ["tsun.username", "tsun.coins", "tsun.gems", "tsun.mood"].forEach((key) => localStorage.removeItem(key));
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const ROUTES = {
+    "/home": { label: "Home", toast: "ホームだよ。見ればわかるでしょ。" },
+    "/story": { label: "Story", toast: "ストーリーは準備中。べ、別に期待してないし。" },
+    "/training": { label: "Training", toast: "育成は次のフェーズ。ちゃんと覚えてるから。" },
+    "/chat": { label: "Chat", toast: "チャットは次のフェーズ。ちゃんと覚えてるから。" },
+    "/gacha": { label: "Gacha", toast: "ガチャはまだ演出だけ。無駄遣い禁止。" },
+    "/shop": { label: "Shop", toast: "ショップは仮置き。買わせる気じゃないから。" },
+    "/mission": { label: "Mission", toast: "今日の目標: 授業を1回こなすこと。" },
+    "/event": { label: "Event", toast: "イベント準備中。夏っぽいやつ、かも。" },
+    "/menu": { label: "Menu", toast: "メニューは仮ルートだよ。" },
+    "/notice": { label: "Notice", toast: "未読のお知らせはない。たぶん。" },
+    "/lesson/01": { label: "Event", toast: "Event:01 開始、ってまだ画面だけだからね。" },
+    "/profile": { label: "Profile", toast: "プロフィール編集は名前だけ対応中。" }
+  };
+
+  const DIALOGUES = {
+    mood: [
+      { id: "tired", label: "機嫌: ねむい", line: "朝から元気すぎ。\n少しは静かにしなさいよ。" },
+      { id: "annoyed", label: "機嫌: むすっ", line: "べ、別に怒ってない。\n見ればわかるでしょ。" },
+      { id: "happy", label: "機嫌: ちょっと良い", line: "今日はまあまあ。\nあんたが来たからじゃないけど。" }
+    ],
+    click: [
+      "な、なに見てるのよ。\n用があるなら言いなさい。",
+      "クリックしすぎ。\nでも反応してあげる。",
+      "また来たの？\n別に嫌じゃないけど。"
+    ],
+    idle: [
+      "さっきから見すぎ。\nばか、照れるでしょ。",
+      "放置するならするで、\nちゃんと戻ってきなさいよ。"
+    ],
+    lesson: "授業を始めるの？\nふーん、少しはやる気あるじゃない。",
+    gift: "今日のプレゼント。\nか、勘違いしないで。余っただけ。"
+  };
+
+  const savedMood = JSON.parse(localStorage.getItem("tsun.mood") || "null");
+  const moodIndex = savedMood && savedMood.date === today
+    ? savedMood.index
+    : new Date().getDate() % DIALOGUES.mood.length;
+
+  const STATE = {
+    username: localStorage.getItem("tsun.username") || "mennminnmiiii",
+    coins: Number(localStorage.getItem("tsun.coins") || 50),
+    gems: Number(localStorage.getItem("tsun.gems") || 50),
+    affection: 12,
+    stamina: 6,
+    staminaMax: 10,
+    rank: 4,
+    rankProgress: 3,
+    rankMax: 10,
+    mood: DIALOGUES.mood[moodIndex],
+    pose: 0,
+    clickLine: 0,
+    idleLine: 0
+  };
+
+  const poses = [
+    { src: "assets/main-character.png", alt: "Yui, the tsundere heroine" },
+    { src: "assets/main-character.png", alt: "Yui, flustered line" },
+    { src: "assets/main-character.png", alt: "Yui, soft line" }
+  ];
+
+  const game = document.getElementById("game");
+  const nameLine = document.querySelector(".name-line");
+  const username = document.getElementById("username");
+  const usernameInput = document.getElementById("usernameInput");
+  const moodText = document.getElementById("moodText");
+  const coinCount = document.getElementById("coinCount");
+  const gemCount = document.getElementById("gemCount");
+  const dialogue = document.getElementById("dialogue");
+  const toast = document.getElementById("toast");
+  const characterBtn = document.getElementById("characterBtn");
+  const characterImg = document.getElementById("characterImg");
+  const fxField = document.getElementById("fxField");
+
+  let idleTimer;
+
+  function saveState() {
+    localStorage.setItem("tsun.username", STATE.username);
+    localStorage.setItem("tsun.coins", String(STATE.coins));
+    localStorage.setItem("tsun.gems", String(STATE.gems));
+    localStorage.setItem("tsun.mood", JSON.stringify({ date: today, index: moodIndex }));
+  }
+
+  function renderState() {
+    username.textContent = STATE.username;
+    usernameInput.value = STATE.username;
+    moodText.textContent = STATE.mood.label;
+    coinCount.textContent = STATE.coins;
+    gemCount.textContent = STATE.gems;
+    document.getElementById("staminaNumber").textContent = STATE.affection;
+    document.getElementById("staminaText").textContent = `${STATE.stamina}/${STATE.staminaMax}`;
+    document.getElementById("rankNumber").textContent = STATE.rank;
+    document.getElementById("rankText").textContent = `${STATE.rankProgress}/${STATE.rankMax}`;
+  }
+
+  function say(text) {
+    dialogue.textContent = text;
+    const bubble = document.querySelector(".bubble");
+    bubble.classList.remove("pop");
+    void bubble.offsetWidth;
+    bubble.classList.add("pop");
+  }
+
+  function showToast(text) {
+    toast.textContent = text;
+    toast.classList.add("show");
+    clearTimeout(showToast.timer);
+    showToast.timer = setTimeout(() => toast.classList.remove("show"), 1500);
+  }
+
+  function burst(x, y, count = 5) {
+    const rect = fxField.getBoundingClientRect();
+    const marks = ["♡", "✦", "☆"];
+    for (let i = 0; i < count; i += 1) {
+      const el = document.createElement("span");
+      el.className = "fx";
+      el.textContent = marks[Math.floor(Math.random() * marks.length)];
+      el.style.left = `${x - rect.left + Math.random() * 42 - 21}px`;
+      el.style.top = `${y - rect.top + Math.random() * 22 - 11}px`;
+      el.style.fontSize = `${18 + Math.random() * 18}px`;
+      el.style.animationDelay = `${Math.random() * .16}s`;
+      fxField.appendChild(el);
+      el.addEventListener("animationend", () => el.remove(), { once: true });
+    }
+  }
+
+  function activateRoute(route) {
+    document.querySelectorAll(".nav-btn").forEach((nav) => {
+      const active = nav.dataset.route === route;
+      nav.classList.toggle("active", active);
+      if (active) nav.setAttribute("aria-current", "page");
+      else nav.removeAttribute("aria-current");
+    });
+  }
+
+  function bumpCharacter() {
+    characterBtn.classList.remove("bump");
+    void characterBtn.offsetWidth;
+    characterBtn.classList.add("bump");
+  }
+
+  function resetIdleTimer() {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      const line = DIALOGUES.idle[STATE.idleLine % DIALOGUES.idle.length];
+      STATE.idleLine += 1;
+      say(line);
+    }, 12000);
+  }
+
+  function saveUsername() {
+    const next = usernameInput.value.trim();
+    nameLine.classList.remove("editing");
+    if (!next) {
+      usernameInput.value = STATE.username;
+      return;
+    }
+    STATE.username = next.slice(0, 18);
+    saveState();
+    renderState();
+    showToast("Name updated");
+  }
+
+  function runSelfTest() {
+    const requiredRoutes = ["/home", "/story", "/training", "/chat", "/gacha", "/shop", "/mission", "/event", "/menu", "/notice", "/lesson/01"];
+    const missingRoutes = requiredRoutes.filter((route) => !ROUTES[route]);
+    const result = {
+      routes: missingRoutes.length === 0,
+      dialogue: DIALOGUES.click.length > 0 && DIALOGUES.mood.length === 3,
+      state: Number.isFinite(STATE.coins) && Number.isFinite(STATE.gems) && STATE.username.length > 0
+    };
+    const passed = Object.values(result).every(Boolean);
+    window.__selftest = { passed, result, missingRoutes };
+    document.body.dataset.selftest = passed ? "passed" : "failed";
+    console[passed ? "log" : "error"]("Date-A-Tsundere selftest", window.__selftest);
+  }
+
+  renderState();
+  saveState();
+  say("私は、目立たない。\nでも、誰より必要とされてる。");
+  resetIdleTimer();
+
+  document.addEventListener("pointerdown", resetIdleTimer, { passive: true });
+  document.addEventListener("keydown", resetIdleTimer);
+
+  document.addEventListener("click", (event) => {
+    const btn = event.target.closest("button");
+    if (!btn) return;
+
+    if (btn.dataset.route) {
+      const route = btn.dataset.route;
+      activateRoute(route);
+      showToast(ROUTES[route]?.toast || `Route placeholder: ${route}`);
+      if (route === "/lesson/01") {
+        say(DIALOGUES.lesson);
+        game.classList.remove("shake");
+        void game.offsetWidth;
+        game.classList.add("shake");
+      }
+      burst(event.clientX, event.clientY, route === "/lesson/01" ? 8 : 4);
+      return;
+    }
+
+    if (btn.dataset.action === "daily-gift") {
+      STATE.gems += 5;
+      saveState();
+      renderState();
+      say(DIALOGUES.gift);
+      showToast("+5 gems");
+      burst(event.clientX, event.clientY, 7);
+      return;
+    }
+
+    if (btn.dataset.action === "character") {
+      STATE.pose = (STATE.pose + 1) % poses.length;
+      STATE.clickLine += 1;
+      characterImg.src = poses[STATE.pose].src;
+      characterImg.alt = poses[STATE.pose].alt;
+      say(DIALOGUES.click[(STATE.clickLine - 1) % DIALOGUES.click.length]);
+      bumpCharacter();
+      burst(event.clientX, event.clientY, 5);
+      return;
+    }
+
+    if (btn.dataset.action === "edit-name") {
+      nameLine.classList.add("editing");
+      usernameInput.focus();
+      usernameInput.select();
+    }
+  });
+
+  usernameInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") saveUsername();
+    if (event.key === "Escape") {
+      usernameInput.value = STATE.username;
+      nameLine.classList.remove("editing");
+    }
+  });
+
+  usernameInput.addEventListener("blur", saveUsername);
+
+  if (params.has("selftest")) runSelfTest();
+})();
+</script>
+</body>
+</html>

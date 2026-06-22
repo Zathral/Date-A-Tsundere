@@ -1,0 +1,15 @@
+{
+  "name": "tsundere",
+  "version": "1.0.0",
+  "description": "Fixed the icon crops by replacing the brittle screenshot crops with clean transparent reference-style icon assets, then tightened the left status layout so labels, numbers, and bars no longer collide.",
+  "main": "index.js",
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.61.0",
+    "@types/node": "^26.0.0"
+  }
+}
