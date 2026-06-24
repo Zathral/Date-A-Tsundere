@@ -297,6 +297,8 @@
     height: 100%;
     border-radius: inherit;
     box-shadow: inset 0 2px rgba(255, 255, 255, .45);
+    transform-origin: left center;
+    animation: bar-grow .9s ease-out both;
   }
 
   .energy .bar-fill { background: linear-gradient(90deg, #ff44a6, #ff7ccb); }
@@ -323,9 +325,9 @@
   .mood-chip {
     position: absolute;
     left: 5.35%;
-    top: 31.4%;
+    top: 36.3%;
     z-index: 8;
-    display: none;
+    display: flex;
     align-items: center;
     gap: .42em;
     max-width: 20%;
@@ -338,6 +340,7 @@
     font-size: clamp(10px, .98vw, 13px);
     font-weight: 900;
     white-space: nowrap;
+    animation: mood-float 3.8s ease-in-out infinite;
   }
 
   .mood-dot {
@@ -346,6 +349,17 @@
     border-radius: 50%;
     background: var(--pink);
     box-shadow: 0 0 0 3px #ffd5ec;
+    animation: mood-pulse 1.9s ease-in-out infinite;
+  }
+
+  .game[data-mood="tired"] .mood-dot {
+    background: #a68dff;
+    box-shadow: 0 0 0 3px #e5ddff;
+  }
+
+  .game[data-mood="happy"] .mood-dot {
+    background: var(--mint);
+    box-shadow: 0 0 0 3px #d8fff5;
   }
 
   .tab-card {
@@ -586,6 +600,106 @@
     white-space: pre-line;
   }
 
+  .chat-view {
+    position: absolute;
+    left: 58.4%;
+    top: 26.8%;
+    z-index: 12;
+    width: 32.5%;
+    min-height: 43%;
+    display: none;
+    grid-template-rows: auto 1fr auto;
+    gap: 12px;
+    padding: 2% 2.15%;
+    border: 4px solid var(--blue);
+    border-radius: 26px;
+    background: rgba(255, 255, 255, .96);
+    box-shadow: var(--shadow);
+    color: #284aa4;
+    transform: rotate(-1.2deg);
+  }
+
+  .game.route-chat .chat-view { display: grid; }
+
+  .game.route-chat .bubble,
+  .game.route-chat .mission-card,
+  .game.route-chat .event-card,
+  .game.route-chat .pink-scribble,
+  .game.route-chat .lesson-cta {
+    display: none;
+  }
+
+  .chat-title {
+    margin: 0;
+    color: var(--blue);
+    font-family: "Nunito", "M PLUS Rounded 1c", sans-serif;
+    font-size: clamp(18px, 2vw, 28px);
+    font-weight: 900;
+    line-height: 1;
+    text-shadow: 1px 2px #dceaff;
+  }
+
+  .chat-line {
+    min-height: 72px;
+    padding: 13px 14px;
+    border: 3px solid rgba(49, 95, 232, .26);
+    border-radius: 18px;
+    background: #f8fbff;
+    font-size: clamp(12px, 1.1vw, 15px);
+    font-weight: 900;
+    line-height: 1.32;
+    white-space: pre-line;
+  }
+
+  .chat-actions {
+    display: grid;
+    gap: 8px;
+  }
+
+  .chat-choice {
+    min-height: 38px;
+    padding: 8px 11px;
+    border: 3px solid var(--blue);
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 3px 0 rgba(31, 70, 184, .34);
+    color: #284aa4;
+    font-size: clamp(11px, 1.05vw, 14px);
+    font-weight: 900;
+    transition: transform .14s ease, filter .14s ease;
+  }
+
+  .chat-choice:hover { transform: translateY(-2px); filter: brightness(1.04); }
+  .chat-choice:active { transform: translateY(2px); filter: brightness(.98); }
+
+  .lesson-preview {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 10px 12px;
+    border: 3px solid #9bb9ff;
+    border-radius: 18px;
+    background: #eef6ff;
+    color: #284aa4;
+    font-size: clamp(10px, .95vw, 13px);
+    font-weight: 900;
+  }
+
+  .lesson-preview.is-highlighted {
+    border-color: var(--pink);
+    background: #fff0f8;
+    animation: pop .24s ease;
+  }
+
+  .chat-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: clamp(10px, .9vw, 12px);
+    font-weight: 900;
+  }
+
   .currency {
     position: absolute;
     top: 2.2%;
@@ -622,6 +736,10 @@
     line-height: 1;
     text-shadow: 0 2px #173996;
     transform: skewX(10deg);
+  }
+
+  .currency-pill.bump {
+    animation: currency-bump .34s ease;
   }
 
   .currency-icon {
@@ -977,6 +1095,17 @@
     animation: float-up .72s ease-out forwards;
   }
 
+  .fx.petal {
+    width: clamp(7px, .8vw, 11px);
+    aspect-ratio: 1;
+    border-radius: 72% 12% 72% 18%;
+    background: rgba(255, 146, 207, .66);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, .38);
+    color: transparent;
+    text-shadow: none;
+    animation: petal-drift var(--fall, 7s) linear forwards;
+  }
+
   .toast {
     position: absolute;
     left: 50%;
@@ -1011,6 +1140,33 @@
   @keyframes float-up {
     from { opacity: 1; transform: translateY(0) scale(.8) rotate(-8deg); }
     to { opacity: 0; transform: translateY(-70px) scale(1.25) rotate(12deg); }
+  }
+
+  @keyframes petal-drift {
+    0% { opacity: 0; transform: translate3d(0, -24px, 0) rotate(0deg); }
+    12% { opacity: .82; }
+    88% { opacity: .62; }
+    100% { opacity: 0; transform: translate3d(var(--drift, 80px), 110vh, 0) rotate(520deg); }
+  }
+
+  @keyframes bar-grow {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+
+  @keyframes mood-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.22); }
+  }
+
+  @keyframes mood-float {
+    0%, 100% { transform: translateY(0) rotate(-1deg); }
+    50% { transform: translateY(-2px) rotate(-1deg); }
+  }
+
+  @keyframes currency-bump {
+    0%, 100% { transform: skewX(-10deg) scale(1); }
+    55% { transform: skewX(-10deg) scale(1.13); }
   }
 
   @keyframes pop {
@@ -1118,6 +1274,24 @@
 でも、誰より必要とされてる。</div>
     </aside>
 
+    <section id="chatView" class="chat-view" data-testid="chat-view" aria-label="Chat gameplay" hidden>
+      <h2 class="chat-title">Chat with Yui</h2>
+      <div id="chatLine" class="chat-line" aria-live="polite">Pick a reply. I-it is not like I was waiting.</div>
+      <div class="chat-actions" aria-label="Chat replies">
+        <button class="chat-choice" data-action="chat-choice" data-chat-choice="tease">Tease back</button>
+        <button class="chat-choice" data-action="chat-choice" data-chat-choice="sincere">Be sincere</button>
+        <button class="chat-choice" data-action="chat-choice" data-chat-choice="lesson">Ask about lesson</button>
+      </div>
+      <div id="lessonPreview" class="lesson-preview" data-testid="lesson-preview">
+        <span>Next lesson reward: +1 rank progress</span>
+        <span>Preview</span>
+      </div>
+      <div class="chat-meta">
+        <span>Turns: <span id="chatTurns" data-testid="chat-turns">0</span></span>
+        <span>Affection cap: 20</span>
+      </div>
+    </section>
+
     <section class="currency coin" aria-label="Coin currency">
       <span class="currency-icon coin-mark" aria-hidden="true">$</span>
       <div class="currency-pill"><span id="coinCount">50</span></div>
@@ -1177,10 +1351,19 @@
 (() => {
   const params = new URLSearchParams(location.search);
   if (params.has("reset")) {
-    ["tsun.username", "tsun.coins", "tsun.gems", "tsun.mood"].forEach((key) => localStorage.removeItem(key));
+    ["tsun.username", "tsun.coins", "tsun.gems", "tsun.mood", "tsun.affection", "tsun.stamina", "tsun.rankProgress", "tsun.chatTurns"].forEach((key) => localStorage.removeItem(key));
   }
 
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
   const today = new Date().toISOString().slice(0, 10);
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const moodPeriod = (() => {
+    const hour = new Date().getHours();
+    if (hour < 10) return "morning";
+    if (hour < 18) return "day";
+    return "evening";
+  })();
+  const moodByPeriod = { morning: 0, day: 1, evening: 2 };
   const ROUTES = {
     "/home": { label: "Home", toast: "ホームだよ。見ればわかるでしょ。" },
     "/story": { label: "Story", toast: "ストーリーは準備中。べ、別に期待してないし。" },
@@ -1215,22 +1398,52 @@
     gift: "今日のプレゼント。\nか、勘違いしないで。余っただけ。"
   };
 
+  const CHAT_CHOICES = {
+    tease: {
+      line: "Bold today, huh? Fine. I will allow one clever reply.",
+      affection: 1,
+      stamina: -1,
+      coins: 0,
+      rankProgress: 0,
+      toast: "+1 affection"
+    },
+    sincere: {
+      line: "D-don't say it that directly. Here, take these coins and stop smiling.",
+      affection: 2,
+      stamina: 0,
+      coins: 5,
+      rankProgress: 0,
+      toast: "+2 affection, +5 coins"
+    },
+    lesson: {
+      line: "If you do the next lesson, rank progress goes up. I remembered because someone has to.",
+      affection: 0,
+      stamina: 0,
+      coins: 0,
+      rankProgress: 1,
+      toast: "Lesson reward preview"
+    }
+  };
+
   const savedMood = JSON.parse(localStorage.getItem("tsun.mood") || "null");
-  const moodIndex = savedMood && savedMood.date === today
+  const moodIndex = savedMood && savedMood.date === today && savedMood.period === moodPeriod
     ? savedMood.index
-    : new Date().getDate() % DIALOGUES.mood.length;
+    : moodByPeriod[moodPeriod];
 
   const STATE = {
     username: localStorage.getItem("tsun.username") || "mennminnmiiii",
     coins: Number(localStorage.getItem("tsun.coins") || 50),
     gems: Number(localStorage.getItem("tsun.gems") || 50),
-    affection: 12,
-    stamina: 6,
+    affection: clamp(Number(localStorage.getItem("tsun.affection") || 12), 0, 20),
+    affectionMax: 20,
+    stamina: clamp(Number(localStorage.getItem("tsun.stamina") || 6), 0, 10),
     staminaMax: 10,
     rank: 4,
-    rankProgress: 3,
+    rankProgress: clamp(Number(localStorage.getItem("tsun.rankProgress") || 3), 0, 10),
     rankMax: 10,
     mood: DIALOGUES.mood[moodIndex],
+    route: "/home",
+    chatTurns: Number(localStorage.getItem("tsun.chatTurns") || 0),
     pose: 0,
     clickLine: 0,
     idleLine: 0
@@ -1254,30 +1467,52 @@
   const characterBtn = document.getElementById("characterBtn");
   const characterImg = document.getElementById("characterImg");
   const fxField = document.getElementById("fxField");
+  const chatView = document.getElementById("chatView");
+  const chatLine = document.getElementById("chatLine");
+  const chatTurns = document.getElementById("chatTurns");
+  const lessonPreview = document.getElementById("lessonPreview");
 
   let idleTimer;
+  let typeTimer;
 
   function saveState() {
     localStorage.setItem("tsun.username", STATE.username);
     localStorage.setItem("tsun.coins", String(STATE.coins));
     localStorage.setItem("tsun.gems", String(STATE.gems));
-    localStorage.setItem("tsun.mood", JSON.stringify({ date: today, index: moodIndex }));
+    localStorage.setItem("tsun.affection", String(STATE.affection));
+    localStorage.setItem("tsun.stamina", String(STATE.stamina));
+    localStorage.setItem("tsun.rankProgress", String(STATE.rankProgress));
+    localStorage.setItem("tsun.chatTurns", String(STATE.chatTurns));
+    localStorage.setItem("tsun.mood", JSON.stringify({ date: today, period: moodPeriod, index: moodIndex }));
   }
 
   function renderState() {
     username.textContent = STATE.username;
     usernameInput.value = STATE.username;
     moodText.textContent = STATE.mood.label;
+    game.dataset.mood = STATE.mood.id;
     coinCount.textContent = STATE.coins;
     gemCount.textContent = STATE.gems;
     document.getElementById("staminaNumber").textContent = STATE.affection;
     document.getElementById("staminaText").textContent = `${STATE.stamina}/${STATE.staminaMax}`;
     document.getElementById("rankNumber").textContent = STATE.rank;
     document.getElementById("rankText").textContent = `${STATE.rankProgress}/${STATE.rankMax}`;
+    chatTurns.textContent = STATE.chatTurns;
   }
 
   function say(text) {
-    dialogue.textContent = text;
+    clearInterval(typeTimer);
+    if (reducedMotion || params.has("selftest")) {
+      dialogue.textContent = text;
+    } else {
+      dialogue.textContent = "";
+      let index = 0;
+      typeTimer = setInterval(() => {
+        dialogue.textContent += text[index];
+        index += 1;
+        if (index >= text.length) clearInterval(typeTimer);
+      }, 18);
+    }
     const bubble = document.querySelector(".bubble");
     bubble.classList.remove("pop");
     void bubble.offsetWidth;
@@ -1307,6 +1542,33 @@
     }
   }
 
+  function spawnPetal() {
+    if (reducedMotion) return;
+    const rect = fxField.getBoundingClientRect();
+    const el = document.createElement("span");
+    el.className = "fx petal";
+    el.style.left = `${Math.random() * rect.width}px`;
+    el.style.top = "-18px";
+    el.style.setProperty("--drift", `${38 + Math.random() * 110}px`);
+    el.style.setProperty("--fall", `${6.5 + Math.random() * 4}s`);
+    fxField.appendChild(el);
+    el.addEventListener("animationend", () => el.remove(), { once: true });
+  }
+
+  function startAmbientPetals() {
+    if (reducedMotion || params.has("selftest")) return;
+    spawnPetal();
+    setInterval(spawnPetal, 1500);
+  }
+
+  function bumpCurrency(el) {
+    const pill = el?.closest(".currency")?.querySelector(".currency-pill");
+    if (!pill) return;
+    pill.classList.remove("bump");
+    void pill.offsetWidth;
+    pill.classList.add("bump");
+  }
+
   function activateRoute(route) {
     document.querySelectorAll(".nav-btn").forEach((nav) => {
       const active = nav.dataset.route === route;
@@ -1314,6 +1576,35 @@
       if (active) nav.setAttribute("aria-current", "page");
       else nav.removeAttribute("aria-current");
     });
+    STATE.route = route;
+    const isChat = route === "/chat";
+    game.classList.toggle("route-chat", isChat);
+    chatView.hidden = !isChat;
+    if (isChat) {
+      chatLine.textContent = "Pick a reply. I-it is not like I was waiting.";
+    } else {
+      lessonPreview.classList.remove("is-highlighted");
+    }
+  }
+
+  function handleChatChoice(choiceId, source) {
+    const choice = CHAT_CHOICES[choiceId];
+    if (!choice) return;
+    STATE.affection = clamp(STATE.affection + choice.affection, 0, STATE.affectionMax);
+    STATE.stamina = clamp(STATE.stamina + choice.stamina, 0, STATE.staminaMax);
+    STATE.coins = clamp(STATE.coins + choice.coins, 0, 999);
+    STATE.rankProgress = clamp(STATE.rankProgress + choice.rankProgress, 0, STATE.rankMax);
+    STATE.chatTurns += 1;
+    chatLine.textContent = choice.line;
+    lessonPreview.classList.toggle("is-highlighted", choiceId === "lesson");
+    saveState();
+    renderState();
+    showToast(choice.toast);
+    say(choice.line);
+    bumpCharacter();
+    if (choice.coins) bumpCurrency(coinCount);
+    const rect = source.getBoundingClientRect();
+    burst(rect.left + rect.width / 2, rect.top + rect.height / 2, choice.affection > 1 ? 8 : 5);
   }
 
   function bumpCharacter() {
@@ -1328,6 +1619,9 @@
       const line = DIALOGUES.idle[STATE.idleLine % DIALOGUES.idle.length];
       STATE.idleLine += 1;
       say(line);
+      bumpCharacter();
+      const rect = characterBtn.getBoundingClientRect();
+      burst(rect.left + rect.width * .58, rect.top + rect.height * .45, 4);
     }, 12000);
   }
 
@@ -1350,7 +1644,9 @@
     const result = {
       routes: missingRoutes.length === 0,
       dialogue: DIALOGUES.click.length > 0 && DIALOGUES.mood.length === 3,
-      state: Number.isFinite(STATE.coins) && Number.isFinite(STATE.gems) && STATE.username.length > 0
+      state: Number.isFinite(STATE.coins) && Number.isFinite(STATE.gems) && STATE.username.length > 0,
+      chat: !!chatView && Object.keys(CHAT_CHOICES).length === 3 && !!lessonPreview,
+      effects: typeof spawnPetal === "function" && typeof startAmbientPetals === "function" && game.dataset.mood === STATE.mood.id
     };
     const passed = Object.values(result).every(Boolean);
     window.__selftest = { passed, result, missingRoutes };
@@ -1362,6 +1658,7 @@
   saveState();
   say("私は、目立たない。\nでも、誰より必要とされてる。");
   resetIdleTimer();
+  startAmbientPetals();
 
   document.addEventListener("pointerdown", resetIdleTimer, { passive: true });
   document.addEventListener("keydown", resetIdleTimer);
@@ -1369,6 +1666,11 @@
   document.addEventListener("click", (event) => {
     const btn = event.target.closest("button");
     if (!btn) return;
+
+    if (btn.dataset.action === "chat-choice") {
+      handleChatChoice(btn.dataset.chatChoice, btn);
+      return;
+    }
 
     if (btn.dataset.route) {
       const route = btn.dataset.route;
@@ -1388,6 +1690,7 @@
       STATE.gems += 5;
       saveState();
       renderState();
+      bumpCurrency(btn);
       say(DIALOGUES.gift);
       showToast("+5 gems");
       burst(event.clientX, event.clientY, 7);
