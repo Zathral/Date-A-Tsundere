@@ -140,3 +140,15 @@ test('chat mini state stays inside stat bounds', async ({ page }) => {
   await expect(page.locator('#staminaText')).toHaveText('0/10');
   await expect(page.locator('#rankText')).toHaveText('10/10');
 });
+
+test('free-text chat applies affection and memory from the API', async ({ page }) => {
+  await page.route('**/api/chat', route => route.fulfill({
+    json: { reply: 'Hmph. Ramen? Fine.', translation: '', emotion: 'smug', affection_delta: 2, memory: 'likes ramen', model: 'mock' }
+  }));
+  await page.goto(`${appUrl}?reset=1&selftest=1`);
+  await page.getByRole('button', { name: 'Chat' }).click();
+  await page.locator('.chat-input').fill('I love ramen');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.locator('#chatLine')).toHaveText('Hmph. Ramen? Fine.');
+  await expect(page.locator('#staminaNumber')).toHaveText('14');
+});

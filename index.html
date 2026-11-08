@@ -1188,18 +1188,6 @@
     75% { transform: translateX(-2px); }
   }
 
-  @media (max-width: 760px) {
-    .game {
-      width: 100vw;
-      height: auto;
-    }
-
-    .mood-chip { display: none; }
-    .bubble { top: 14%; width: 31%; }
-    .bottom-nav { left: 3.4%; right: 1.7%; }
-    .nav-btn { font-size: clamp(12px, 3vw, 18px); }
-  }
-
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -1210,9 +1198,119 @@
       transition-duration: .001ms !important;
     }
   }
+  
+  /* ===== v9: fixed 1200x675 stage scaled to the window ===== */
+  .screen-wrap {
+    position: fixed;
+    inset: 0;
+    display: block;
+    overflow: hidden;
+    background: #071331;
+  }
+  .screen-wrap::before {
+    content: "";
+    position: absolute;
+    inset: -40px;
+    background: url("assets/background-stage.png") center / cover no-repeat;
+    filter: blur(22px) brightness(.55) saturate(1.1);
+  }
+  .game {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1200px;
+    height: 675px;
+    aspect-ratio: auto;
+    translate: -50% -50%;
+    scale: var(--s, 1);
+    transform-origin: center;
+  }
+
+  /* petals fall inside the stage, not the viewport */
+  @keyframes petal-drift {
+    0%   { opacity: 0; transform: translate3d(0, -24px, 0) rotate(0deg); }
+    12%  { opacity: .82; }
+    88%  { opacity: .62; }
+    100% { opacity: 0; transform: translate3d(var(--drift, 80px), 760px, 0) rotate(520deg); }
+  }
+
+  /* overlap fixes */
+  .profile { max-width: 17.6%; }
+  #username { min-width: 0; }
+  .mood-chip { top: 35.8%; padding: 2px 10px; border-width: 2px; font-size: 12px; }
+  .mission-card { top: 44.3%; }
+  .event-card { left: 6.4%; width: 21.4%; }
+  .bubble-text { min-width: 0; }
+
+  /* chat panel: fixed box, nothing can run into the bottom nav */
+  .chat-view {
+    left: 59.6%;
+    top: 23%;
+    width: 31.6%;
+    height: 62%;
+    min-height: 0;
+    padding: 14px 16px;
+    gap: 8px;
+    overflow: hidden;
+    transform: none;
+    display: none;
+    flex-direction: column;
+  }
+  .game.route-chat .chat-view { display: flex; }
+  .chat-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .chat-title { font-size: 22px; }
+  .lang-toggle {
+    flex: 0 0 auto;
+    padding: 4px 10px;
+    border: 3px solid var(--blue);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--blue);
+    font-size: 12px;
+    font-weight: 900;
+    box-shadow: 0 2px 0 rgba(31, 70, 184, .34);
+  }
+  .chat-banner { min-height: 14px; color: var(--pink); font-size: 11px; font-weight: 900; }
+  .chat-line { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px 12px; font-size: 14px; }
+  .chat-translation { display: none; padding: 0 4px; color: #5c76c4; font-size: 11px; font-weight: 800; }
+  .chat-translation.show { display: block; }
+  .chat-actions { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .chat-choice { min-height: 34px; padding: 4px 6px; font-size: 11px; line-height: 1.15; }
+  .chat-form { display: flex; gap: 6px; }
+  .chat-input {
+    flex: 1;
+    min-width: 0;
+    height: 34px;
+    padding: 0 12px;
+    border: 3px solid var(--blue);
+    border-radius: 999px;
+    background: #fff;
+    color: #284aa4;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    outline: none;
+  }
+  .chat-input:focus { border-color: var(--pink); }
+  .chat-form .chat-choice { min-width: 58px; padding: 0 10px; }
+  .lesson-preview { padding: 6px 10px; font-size: 11px; }
+  .chat-meta { font-size: 11px; }
+
+  /* portrait phones: ask for landscape */
+  .rotate-hint { display: none; }
+  @media (orientation: portrait) and (max-width: 700px) {
+    .rotate-hint {
+      position: fixed; inset: 0; z-index: 100;
+      display: grid; place-items: center;
+      padding: 24px; text-align: center;
+      background: rgba(7, 19, 49, .94); color: #fff;
+      font: 800 18px/1.6 "M PLUS Rounded 1c", sans-serif;
+    }
+  }
 </style>
 </head>
 <body>
+<div class="rotate-hint">Rotate your phone sideways to play<br>画面を横向きにしてね</div>
 <div class="screen-wrap">
   <main id="game" class="game" aria-label="Date-A-Tsundere main dashboard">
     <section class="notebook" aria-hidden="true"></section>
@@ -1486,6 +1584,13 @@
     localStorage.setItem("tsun.mood", JSON.stringify({ date: today, period: moodPeriod, index: moodIndex }));
   }
 
+  function fitStage() {
+    const s = Math.min(window.innerWidth / 1200, window.innerHeight / 675);
+    document.documentElement.style.setProperty("--s", s);
+  }
+  fitStage();
+  window.addEventListener("resize", fitStage);
+
   function renderState() {
     username.textContent = STATE.username;
     usernameInput.value = STATE.username;
@@ -1528,13 +1633,14 @@
 
   function burst(x, y, count = 5) {
     const rect = fxField.getBoundingClientRect();
+    const k = rect.width / fxField.offsetWidth || 1;
     const marks = ["♡", "✦", "☆"];
     for (let i = 0; i < count; i += 1) {
       const el = document.createElement("span");
       el.className = "fx";
       el.textContent = marks[Math.floor(Math.random() * marks.length)];
-      el.style.left = `${x - rect.left + Math.random() * 42 - 21}px`;
-      el.style.top = `${y - rect.top + Math.random() * 22 - 11}px`;
+      el.style.left = `${(x - rect.left) / k + Math.random() * 42 - 21}px`;
+      el.style.top = `${(y - rect.top) / k + Math.random() * 22 - 11}px`;
       el.style.fontSize = `${18 + Math.random() * 18}px`;
       el.style.animationDelay = `${Math.random() * .16}s`;
       fxField.appendChild(el);
@@ -1544,10 +1650,9 @@
 
   function spawnPetal() {
     if (reducedMotion) return;
-    const rect = fxField.getBoundingClientRect();
     const el = document.createElement("span");
     el.className = "fx petal";
-    el.style.left = `${Math.random() * rect.width}px`;
+    el.style.left = `${Math.random() * fxField.offsetWidth}px`;
     el.style.top = "-18px";
     el.style.setProperty("--drift", `${38 + Math.random() * 110}px`);
     el.style.setProperty("--fall", `${6.5 + Math.random() * 4}s`);
