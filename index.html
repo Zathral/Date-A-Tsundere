@@ -603,10 +603,10 @@
   .chat-view {
     position: absolute;
     left: 58.4%;
-    top: 26.8%;
+    top: 24%;
     z-index: 12;
     width: 32.5%;
-    min-height: 43%;
+    min-height: 48%;
     display: none;
     grid-template-rows: auto 1fr auto;
     gap: 12px;
@@ -1724,9 +1724,11 @@
   });
 
   usernameInput.addEventListener("blur", saveUsername);
+  window.TsunGame = { STATE, renderState, saveState, showToast, say, burst, bumpCharacter, clamp, params };
 
   if (params.has("selftest")) runSelfTest();
 })();
 </script>
+<script src="chat-ai.js"></script>
 </body>
 </html>
