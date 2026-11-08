@@ -603,10 +603,10 @@
   .chat-view {
     position: absolute;
     left: 58.4%;
-    top: 26.8%;
+    top: 24%;
     z-index: 12;
     width: 32.5%;
-    min-height: 43%;
+    min-height: 48%;
     display: none;
     grid-template-rows: auto 1fr auto;
     gap: 12px;
@@ -672,19 +672,7 @@
   .chat-choice:hover { transform: translateY(-2px); filter: brightness(1.04); }
   .chat-choice:active { transform: translateY(2px); filter: brightness(.98); }
 
-  .lesson-preview {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 8px;
-    align-items: center;
-    padding: 10px 12px;
-    border: 3px solid #9bb9ff;
-    border-radius: 18px;
-    background: #eef6ff;
-    color: #284aa4;
-    font-size: clamp(10px, .95vw, 13px);
-    font-weight: 900;
-  }
+
 
   .lesson-preview.is-highlighted {
     border-color: var(--pink);
@@ -1188,18 +1176,6 @@
     75% { transform: translateX(-2px); }
   }
 
-  @media (max-width: 760px) {
-    .game {
-      width: 100vw;
-      height: auto;
-    }
-
-    .mood-chip { display: none; }
-    .bubble { top: 14%; width: 31%; }
-    .bottom-nav { left: 3.4%; right: 1.7%; }
-    .nav-btn { font-size: clamp(12px, 3vw, 18px); }
-  }
-
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -1210,9 +1186,107 @@
       transition-duration: .001ms !important;
     }
   }
+  
+  /* ===== v9: fixed 1200x675 stage scaled to the window ===== */
+  .screen-wrap {
+    position: fixed;
+    inset: 0;
+    display: block;
+    overflow: hidden;
+    background: #071331;
+  }
+  .screen-wrap::before {
+    content: "";
+    position: absolute;
+    inset: -40px;
+    background: url("assets/background-stage.png") center / cover no-repeat;
+    filter: blur(22px) brightness(.55) saturate(1.1);
+  }
+  .game {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1200px;
+    height: 675px;
+    aspect-ratio: auto;
+    translate: -50% -50%;
+    scale: var(--s, 1);
+    transform-origin: center;
+  }
+
+  /* petals fall inside the stage, not the viewport */
+  @keyframes petal-drift {
+    0%   { opacity: 0; transform: translate3d(0, -24px, 0) rotate(0deg); }
+    12%  { opacity: .82; }
+    88%  { opacity: .62; }
+    100% { opacity: 0; transform: translate3d(var(--drift, 80px), 760px, 0) rotate(520deg); }
+  }
+
+  /* overlap fixes */
+  .profile { max-width: 17.6%; }
+  #username { min-width: 0; }
+  .mood-chip { top: 35.8%; padding: 2px 10px; border-width: 2px; font-size: 12px; }
+  .mission-card { top: 44.3%; }
+  .event-card { left: 6.4%; width: 21.4%; }
+  .bubble-text { min-width: 0; }
+
+  /* chat panel: fixed box, nothing can run into the bottom nav */
+  .game.route-chat .chat-view { display: flex; }
+  .chat-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .chat-title { font-size: 22px; }
+  .lang-toggle {
+    flex: 0 0 auto;
+    padding: 4px 10px;
+    border: 3px solid var(--blue);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--blue);
+    font-size: 12px;
+    font-weight: 900;
+    box-shadow: 0 2px 0 rgba(31, 70, 184, .34);
+  }
+  .chat-banner { min-height: 14px; color: var(--pink); font-size: 11px; font-weight: 900; }
+  .chat-line { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px 12px; font-size: 14px; }
+  .chat-translation { display: none; padding: 0 4px; color: #5c76c4; font-size: 11px; font-weight: 800; }
+  .chat-translation.show { display: block; }
+  .chat-actions { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .chat-choice { min-height: 34px; padding: 4px 6px; font-size: 11px; line-height: 1.15; }
+  .chat-form { display: flex; gap: 6px; }
+  .chat-input {
+    flex: 1;
+    min-width: 0;
+    height: 34px;
+    padding: 0 12px;
+    border: 3px solid var(--blue);
+    border-radius: 999px;
+    background: #fff;
+    color: #284aa4;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    outline: none;
+  }
+  .chat-input:focus { border-color: var(--pink); }
+  .chat-form .chat-choice { min-width: 58px; padding: 0 10px; }
+  .lesson-preview { padding: 6px 10px; font-size: 11px; }
+  .chat-meta { font-size: 11px; }
+
+  /* portrait phones: ask for landscape */
+  .rotate-hint { display: none; }
+  @media (orientation: portrait) and (max-width: 700px) {
+    .rotate-hint {
+      position: fixed; inset: 0; z-index: 100;
+      display: grid; place-items: center;
+      padding: 24px; text-align: center;
+      background: rgba(7, 19, 49, .94); color: #fff;
+      font: 800 18px/1.6 "M PLUS Rounded 1c", sans-serif;
+    }
+  }
 </style>
+<link rel="stylesheet" href="css/game.css">
 </head>
 <body>
+<div class="rotate-hint">Rotate your phone sideways to play<br>画面を横向きにしてね</div>
 <div class="screen-wrap">
   <main id="game" class="game" aria-label="Date-A-Tsundere main dashboard">
     <section class="notebook" aria-hidden="true"></section>
@@ -1274,23 +1348,6 @@
 でも、誰より必要とされてる。</div>
     </aside>
 
-    <section id="chatView" class="chat-view" data-testid="chat-view" aria-label="Chat gameplay" hidden>
-      <h2 class="chat-title">Chat with Yui</h2>
-      <div id="chatLine" class="chat-line" aria-live="polite">Pick a reply. I-it is not like I was waiting.</div>
-      <div class="chat-actions" aria-label="Chat replies">
-        <button class="chat-choice" data-action="chat-choice" data-chat-choice="tease">Tease back</button>
-        <button class="chat-choice" data-action="chat-choice" data-chat-choice="sincere">Be sincere</button>
-        <button class="chat-choice" data-action="chat-choice" data-chat-choice="lesson">Ask about lesson</button>
-      </div>
-      <div id="lessonPreview" class="lesson-preview" data-testid="lesson-preview">
-        <span>Next lesson reward: +1 rank progress</span>
-        <span>Preview</span>
-      </div>
-      <div class="chat-meta">
-        <span>Turns: <span id="chatTurns" data-testid="chat-turns">0</span></span>
-        <span>Affection cap: 20</span>
-      </div>
-    </section>
 
     <section class="currency coin" aria-label="Coin currency">
       <span class="currency-icon coin-mark" aria-hidden="true">$</span>
@@ -1347,386 +1404,8 @@
   </main>
 </div>
 
-<script>
-(() => {
-  const params = new URLSearchParams(location.search);
-  if (params.has("reset")) {
-    ["tsun.username", "tsun.coins", "tsun.gems", "tsun.mood", "tsun.affection", "tsun.stamina", "tsun.rankProgress", "tsun.chatTurns"].forEach((key) => localStorage.removeItem(key));
-  }
-
-  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-  const today = new Date().toISOString().slice(0, 10);
-  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const moodPeriod = (() => {
-    const hour = new Date().getHours();
-    if (hour < 10) return "morning";
-    if (hour < 18) return "day";
-    return "evening";
-  })();
-  const moodByPeriod = { morning: 0, day: 1, evening: 2 };
-  const ROUTES = {
-    "/home": { label: "Home", toast: "ホームだよ。見ればわかるでしょ。" },
-    "/story": { label: "Story", toast: "ストーリーは準備中。べ、別に期待してないし。" },
-    "/training": { label: "Training", toast: "育成は次のフェーズ。ちゃんと覚えてるから。" },
-    "/chat": { label: "Chat", toast: "チャットは次のフェーズ。ちゃんと覚えてるから。" },
-    "/gacha": { label: "Gacha", toast: "ガチャはまだ演出だけ。無駄遣い禁止。" },
-    "/shop": { label: "Shop", toast: "ショップは仮置き。買わせる気じゃないから。" },
-    "/mission": { label: "Mission", toast: "今日の目標: 授業を1回こなすこと。" },
-    "/event": { label: "Event", toast: "イベント準備中。夏っぽいやつ、かも。" },
-    "/menu": { label: "Menu", toast: "メニューは仮ルートだよ。" },
-    "/notice": { label: "Notice", toast: "未読のお知らせはない。たぶん。" },
-    "/lesson/01": { label: "Event", toast: "Event:01 開始、ってまだ画面だけだからね。" },
-    "/profile": { label: "Profile", toast: "プロフィール編集は名前だけ対応中。" }
-  };
-
-  const DIALOGUES = {
-    mood: [
-      { id: "tired", label: "機嫌: ねむい", line: "朝から元気すぎ。\n少しは静かにしなさいよ。" },
-      { id: "annoyed", label: "機嫌: むすっ", line: "べ、別に怒ってない。\n見ればわかるでしょ。" },
-      { id: "happy", label: "機嫌: ちょっと良い", line: "今日はまあまあ。\nあんたが来たからじゃないけど。" }
-    ],
-    click: [
-      "な、なに見てるのよ。\n用があるなら言いなさい。",
-      "クリックしすぎ。\nでも反応してあげる。",
-      "また来たの？\n別に嫌じゃないけど。"
-    ],
-    idle: [
-      "さっきから見すぎ。\nばか、照れるでしょ。",
-      "放置するならするで、\nちゃんと戻ってきなさいよ。"
-    ],
-    lesson: "授業を始めるの？\nふーん、少しはやる気あるじゃない。",
-    gift: "今日のプレゼント。\nか、勘違いしないで。余っただけ。"
-  };
-
-  const CHAT_CHOICES = {
-    tease: {
-      line: "Bold today, huh? Fine. I will allow one clever reply.",
-      affection: 1,
-      stamina: -1,
-      coins: 0,
-      rankProgress: 0,
-      toast: "+1 affection"
-    },
-    sincere: {
-      line: "D-don't say it that directly. Here, take these coins and stop smiling.",
-      affection: 2,
-      stamina: 0,
-      coins: 5,
-      rankProgress: 0,
-      toast: "+2 affection, +5 coins"
-    },
-    lesson: {
-      line: "If you do the next lesson, rank progress goes up. I remembered because someone has to.",
-      affection: 0,
-      stamina: 0,
-      coins: 0,
-      rankProgress: 1,
-      toast: "Lesson reward preview"
-    }
-  };
-
-  const savedMood = JSON.parse(localStorage.getItem("tsun.mood") || "null");
-  const moodIndex = savedMood && savedMood.date === today && savedMood.period === moodPeriod
-    ? savedMood.index
-    : moodByPeriod[moodPeriod];
-
-  const STATE = {
-    username: localStorage.getItem("tsun.username") || "mennminnmiiii",
-    coins: Number(localStorage.getItem("tsun.coins") || 50),
-    gems: Number(localStorage.getItem("tsun.gems") || 50),
-    affection: clamp(Number(localStorage.getItem("tsun.affection") || 12), 0, 20),
-    affectionMax: 20,
-    stamina: clamp(Number(localStorage.getItem("tsun.stamina") || 6), 0, 10),
-    staminaMax: 10,
-    rank: 4,
-    rankProgress: clamp(Number(localStorage.getItem("tsun.rankProgress") || 3), 0, 10),
-    rankMax: 10,
-    mood: DIALOGUES.mood[moodIndex],
-    route: "/home",
-    chatTurns: Number(localStorage.getItem("tsun.chatTurns") || 0),
-    pose: 0,
-    clickLine: 0,
-    idleLine: 0
-  };
-
-  const poses = [
-    { src: "assets/main-character.png", alt: "Yui, the tsundere heroine" },
-    { src: "assets/main-character.png", alt: "Yui, flustered line" },
-    { src: "assets/main-character.png", alt: "Yui, soft line" }
-  ];
-
-  const game = document.getElementById("game");
-  const nameLine = document.querySelector(".name-line");
-  const username = document.getElementById("username");
-  const usernameInput = document.getElementById("usernameInput");
-  const moodText = document.getElementById("moodText");
-  const coinCount = document.getElementById("coinCount");
-  const gemCount = document.getElementById("gemCount");
-  const dialogue = document.getElementById("dialogue");
-  const toast = document.getElementById("toast");
-  const characterBtn = document.getElementById("characterBtn");
-  const characterImg = document.getElementById("characterImg");
-  const fxField = document.getElementById("fxField");
-  const chatView = document.getElementById("chatView");
-  const chatLine = document.getElementById("chatLine");
-  const chatTurns = document.getElementById("chatTurns");
-  const lessonPreview = document.getElementById("lessonPreview");
-
-  let idleTimer;
-  let typeTimer;
-
-  function saveState() {
-    localStorage.setItem("tsun.username", STATE.username);
-    localStorage.setItem("tsun.coins", String(STATE.coins));
-    localStorage.setItem("tsun.gems", String(STATE.gems));
-    localStorage.setItem("tsun.affection", String(STATE.affection));
-    localStorage.setItem("tsun.stamina", String(STATE.stamina));
-    localStorage.setItem("tsun.rankProgress", String(STATE.rankProgress));
-    localStorage.setItem("tsun.chatTurns", String(STATE.chatTurns));
-    localStorage.setItem("tsun.mood", JSON.stringify({ date: today, period: moodPeriod, index: moodIndex }));
-  }
-
-  function renderState() {
-    username.textContent = STATE.username;
-    usernameInput.value = STATE.username;
-    moodText.textContent = STATE.mood.label;
-    game.dataset.mood = STATE.mood.id;
-    coinCount.textContent = STATE.coins;
-    gemCount.textContent = STATE.gems;
-    document.getElementById("staminaNumber").textContent = STATE.affection;
-    document.getElementById("staminaText").textContent = `${STATE.stamina}/${STATE.staminaMax}`;
-    document.getElementById("rankNumber").textContent = STATE.rank;
-    document.getElementById("rankText").textContent = `${STATE.rankProgress}/${STATE.rankMax}`;
-    chatTurns.textContent = STATE.chatTurns;
-  }
-
-  function say(text) {
-    clearInterval(typeTimer);
-    if (reducedMotion || params.has("selftest")) {
-      dialogue.textContent = text;
-    } else {
-      dialogue.textContent = "";
-      let index = 0;
-      typeTimer = setInterval(() => {
-        dialogue.textContent += text[index];
-        index += 1;
-        if (index >= text.length) clearInterval(typeTimer);
-      }, 18);
-    }
-    const bubble = document.querySelector(".bubble");
-    bubble.classList.remove("pop");
-    void bubble.offsetWidth;
-    bubble.classList.add("pop");
-  }
-
-  function showToast(text) {
-    toast.textContent = text;
-    toast.classList.add("show");
-    clearTimeout(showToast.timer);
-    showToast.timer = setTimeout(() => toast.classList.remove("show"), 1500);
-  }
-
-  function burst(x, y, count = 5) {
-    const rect = fxField.getBoundingClientRect();
-    const marks = ["♡", "✦", "☆"];
-    for (let i = 0; i < count; i += 1) {
-      const el = document.createElement("span");
-      el.className = "fx";
-      el.textContent = marks[Math.floor(Math.random() * marks.length)];
-      el.style.left = `${x - rect.left + Math.random() * 42 - 21}px`;
-      el.style.top = `${y - rect.top + Math.random() * 22 - 11}px`;
-      el.style.fontSize = `${18 + Math.random() * 18}px`;
-      el.style.animationDelay = `${Math.random() * .16}s`;
-      fxField.appendChild(el);
-      el.addEventListener("animationend", () => el.remove(), { once: true });
-    }
-  }
-
-  function spawnPetal() {
-    if (reducedMotion) return;
-    const rect = fxField.getBoundingClientRect();
-    const el = document.createElement("span");
-    el.className = "fx petal";
-    el.style.left = `${Math.random() * rect.width}px`;
-    el.style.top = "-18px";
-    el.style.setProperty("--drift", `${38 + Math.random() * 110}px`);
-    el.style.setProperty("--fall", `${6.5 + Math.random() * 4}s`);
-    fxField.appendChild(el);
-    el.addEventListener("animationend", () => el.remove(), { once: true });
-  }
-
-  function startAmbientPetals() {
-    if (reducedMotion || params.has("selftest")) return;
-    spawnPetal();
-    setInterval(spawnPetal, 1500);
-  }
-
-  function bumpCurrency(el) {
-    const pill = el?.closest(".currency")?.querySelector(".currency-pill");
-    if (!pill) return;
-    pill.classList.remove("bump");
-    void pill.offsetWidth;
-    pill.classList.add("bump");
-  }
-
-  function activateRoute(route) {
-    document.querySelectorAll(".nav-btn").forEach((nav) => {
-      const active = nav.dataset.route === route;
-      nav.classList.toggle("active", active);
-      if (active) nav.setAttribute("aria-current", "page");
-      else nav.removeAttribute("aria-current");
-    });
-    STATE.route = route;
-    const isChat = route === "/chat";
-    game.classList.toggle("route-chat", isChat);
-    chatView.hidden = !isChat;
-    if (isChat) {
-      chatLine.textContent = "Pick a reply. I-it is not like I was waiting.";
-    } else {
-      lessonPreview.classList.remove("is-highlighted");
-    }
-  }
-
-  function handleChatChoice(choiceId, source) {
-    const choice = CHAT_CHOICES[choiceId];
-    if (!choice) return;
-    STATE.affection = clamp(STATE.affection + choice.affection, 0, STATE.affectionMax);
-    STATE.stamina = clamp(STATE.stamina + choice.stamina, 0, STATE.staminaMax);
-    STATE.coins = clamp(STATE.coins + choice.coins, 0, 999);
-    STATE.rankProgress = clamp(STATE.rankProgress + choice.rankProgress, 0, STATE.rankMax);
-    STATE.chatTurns += 1;
-    chatLine.textContent = choice.line;
-    lessonPreview.classList.toggle("is-highlighted", choiceId === "lesson");
-    saveState();
-    renderState();
-    showToast(choice.toast);
-    say(choice.line);
-    bumpCharacter();
-    if (choice.coins) bumpCurrency(coinCount);
-    const rect = source.getBoundingClientRect();
-    burst(rect.left + rect.width / 2, rect.top + rect.height / 2, choice.affection > 1 ? 8 : 5);
-  }
-
-  function bumpCharacter() {
-    characterBtn.classList.remove("bump");
-    void characterBtn.offsetWidth;
-    characterBtn.classList.add("bump");
-  }
-
-  function resetIdleTimer() {
-    clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => {
-      const line = DIALOGUES.idle[STATE.idleLine % DIALOGUES.idle.length];
-      STATE.idleLine += 1;
-      say(line);
-      bumpCharacter();
-      const rect = characterBtn.getBoundingClientRect();
-      burst(rect.left + rect.width * .58, rect.top + rect.height * .45, 4);
-    }, 12000);
-  }
-
-  function saveUsername() {
-    const next = usernameInput.value.trim();
-    nameLine.classList.remove("editing");
-    if (!next) {
-      usernameInput.value = STATE.username;
-      return;
-    }
-    STATE.username = next.slice(0, 18);
-    saveState();
-    renderState();
-    showToast("Name updated");
-  }
-
-  function runSelfTest() {
-    const requiredRoutes = ["/home", "/story", "/training", "/chat", "/gacha", "/shop", "/mission", "/event", "/menu", "/notice", "/lesson/01"];
-    const missingRoutes = requiredRoutes.filter((route) => !ROUTES[route]);
-    const result = {
-      routes: missingRoutes.length === 0,
-      dialogue: DIALOGUES.click.length > 0 && DIALOGUES.mood.length === 3,
-      state: Number.isFinite(STATE.coins) && Number.isFinite(STATE.gems) && STATE.username.length > 0,
-      chat: !!chatView && Object.keys(CHAT_CHOICES).length === 3 && !!lessonPreview,
-      effects: typeof spawnPetal === "function" && typeof startAmbientPetals === "function" && game.dataset.mood === STATE.mood.id
-    };
-    const passed = Object.values(result).every(Boolean);
-    window.__selftest = { passed, result, missingRoutes };
-    document.body.dataset.selftest = passed ? "passed" : "failed";
-    console[passed ? "log" : "error"]("Date-A-Tsundere selftest", window.__selftest);
-  }
-
-  renderState();
-  saveState();
-  say("私は、目立たない。\nでも、誰より必要とされてる。");
-  resetIdleTimer();
-  startAmbientPetals();
-
-  document.addEventListener("pointerdown", resetIdleTimer, { passive: true });
-  document.addEventListener("keydown", resetIdleTimer);
-
-  document.addEventListener("click", (event) => {
-    const btn = event.target.closest("button");
-    if (!btn) return;
-
-    if (btn.dataset.action === "chat-choice") {
-      handleChatChoice(btn.dataset.chatChoice, btn);
-      return;
-    }
-
-    if (btn.dataset.route) {
-      const route = btn.dataset.route;
-      activateRoute(route);
-      showToast(ROUTES[route]?.toast || `Route placeholder: ${route}`);
-      if (route === "/lesson/01") {
-        say(DIALOGUES.lesson);
-        game.classList.remove("shake");
-        void game.offsetWidth;
-        game.classList.add("shake");
-      }
-      burst(event.clientX, event.clientY, route === "/lesson/01" ? 8 : 4);
-      return;
-    }
-
-    if (btn.dataset.action === "daily-gift") {
-      STATE.gems += 5;
-      saveState();
-      renderState();
-      bumpCurrency(btn);
-      say(DIALOGUES.gift);
-      showToast("+5 gems");
-      burst(event.clientX, event.clientY, 7);
-      return;
-    }
-
-    if (btn.dataset.action === "character") {
-      STATE.pose = (STATE.pose + 1) % poses.length;
-      STATE.clickLine += 1;
-      characterImg.src = poses[STATE.pose].src;
-      characterImg.alt = poses[STATE.pose].alt;
-      say(DIALOGUES.click[(STATE.clickLine - 1) % DIALOGUES.click.length]);
-      bumpCharacter();
-      burst(event.clientX, event.clientY, 5);
-      return;
-    }
-
-    if (btn.dataset.action === "edit-name") {
-      nameLine.classList.add("editing");
-      usernameInput.focus();
-      usernameInput.select();
-    }
-  });
-
-  usernameInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") saveUsername();
-    if (event.key === "Escape") {
-      usernameInput.value = STATE.username;
-      nameLine.classList.remove("editing");
-    }
-  });
-
-  usernameInput.addEventListener("blur", saveUsername);
-
-  if (params.has("selftest")) runSelfTest();
-})();
-</script>
+<script src="js/core.js"></script>
+<script src="js/extras.js"></script>
+<script src="js/story.js"></script>
 </body>
 </html>
