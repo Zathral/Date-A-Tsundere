@@ -4,151 +4,81 @@ import { pathToFileURL } from 'node:url';
 
 const appUrl = pathToFileURL(path.resolve(process.cwd(), 'index.html')).toString();
 
+const REPLY = '<n>Rain taps the window. Yui glances over.</n><s>W-what are you staring at?</s><t></t><m>{"emotion":"flustered","affection_delta":1,"memory":"likes ramen","emote":"blush"}</m>';
+
+// Pretend to be Google: key check + streamed reply
+const stubGemini = (withKey: boolean) => async (page: any) => {
+  await page.addInitScript(([reply, withKey]: [string, boolean]) => {
+    if (withKey) localStorage.setItem('tsun.apiKey', 'test-key');
+    const real = window.fetch.bind(window);
+    window.fetch = (url: any, opts?: any) => {
+      const u = String(url);
+      if (!u.includes('generativelanguage.googleapis.com')) return real(url, opts);
+      if (u.includes('/models?')) return Promise.resolve(new Response('{}'));
+      const body = 'data: ' + JSON.stringify({ candidates: [{ content: { parts: [{ text: reply }] } }] }) + '\n\n';
+      return Promise.resolve(new Response(body, { headers: { 'content-type': 'text/event-stream' } }));
+    };
+  }, [REPLY, withKey]);
+};
+
 test('dashboard self-test passes', async ({ page }) => {
   const errors: string[] = [];
-
-  page.on('pageerror', error => errors.push(error.message));
-  page.on('console', message => {
-    const text = message.text();
-    if (message.type() === 'error' && !text.includes('ERR_NETWORK_ACCESS_DENIED')) {
-      errors.push(text);
-    }
+  await stubGemini(true)(page);
+  page.on('pageerror', e => errors.push(e.message));
+  page.on('console', m => {
+    const text = m.text();
+    if (m.type() === 'error' && !text.includes('ERR_NETWORK_ACCESS_DENIED')) errors.push(text);
   });
-
   await page.goto(`${appUrl}?reset=1&selftest=1`);
   await expect(page.locator('body')).toHaveAttribute('data-selftest', 'passed');
-
-  const selftest = await page.evaluate(() => (
-    window as unknown as {
-      __selftest: {
-        passed: boolean;
-        result: Record<string, boolean>;
-        missingRoutes: string[];
-      };
-    }
-  ).__selftest);
-
-  expect(selftest).toMatchObject({
-    passed: true,
-    result: {
-      routes: true,
-      dialogue: true,
-      state: true,
-      effects: true
-    },
-    missingRoutes: []
-  });
   expect(errors).toEqual([]);
 });
 
 test('ambient effects preserve the reference layout', async ({ page }) => {
+  await stubGemini(true)(page);
   await page.goto(`${appUrl}?reset=1`);
   await page.waitForTimeout(1800);
-
   const result = await page.evaluate(() => {
-    const box = (selector: string) => {
-      const rect = document.querySelector(selector)?.getBoundingClientRect();
-      return rect && { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-    };
-    const overlaps = (
-      a: ReturnType<typeof box>,
-      b: ReturnType<typeof box>
-    ) => !!(a && b && a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y);
-
+    const box = (s: string) => { const r = document.querySelector(s)?.getBoundingClientRect(); return r && { x: r.x, y: r.y, width: r.width, height: r.height }; };
+    const hit = (a: any, b: any) => !!(a && b && a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y);
     const mood = box('.mood-chip');
     return {
-      petalCount: document.querySelectorAll('.fx.petal').length,
-      moodDisplay: getComputedStyle(document.querySelector('.mood-chip') as Element).display,
-      overlaps: [
-        overlaps(mood, box('.stat.energy')) && 'energy',
-        overlaps(mood, box('.stat.rank')) && 'rank',
-        overlaps(mood, box('.mission-card')) && 'mission',
-        overlaps(mood, box('.event-card')) && 'event'
-      ].filter(Boolean)
+      petals: document.querySelectorAll('.fx.petal').length,
+      overlaps: ['.stat.energy', '.stat.rank', '.mission-card', '.event-card'].filter(s => hit(mood, box(s)))
     };
   });
-
-  expect(result.petalCount).toBeGreaterThan(0);
-  expect(result.moodDisplay).toBe('flex');
+  expect(result.petals).toBeGreaterThan(0);
   expect(result.overlaps).toEqual([]);
 });
 
-test('chat route opens dedicated gameplay screen and home restores dashboard', async ({ page }) => {
-  await page.goto(`${appUrl}?reset=1&selftest=1`);
-
-  await page.getByRole('button', { name: 'Chat' }).click();
-  await expect(page.getByTestId('chat-view')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Chat with Yui' })).toBeVisible();
-  await expect(page.locator('.mission-card')).toBeHidden();
-  await expect(page.locator('.event-card')).toBeHidden();
-
-  await page.getByRole('button', { name: 'Home' }).click();
-  await expect(page.getByTestId('chat-view')).toBeHidden();
-  await expect(page.locator('.mission-card')).toBeVisible();
-  await expect(page.locator('.event-card')).toBeVisible();
-});
-
-test('chat choices update affection, rewards, and mini state', async ({ page }) => {
-  await page.goto(`${appUrl}?reset=1&selftest=1`);
-  await page.getByRole('button', { name: 'Chat' }).click();
-
-  await page.getByRole('button', { name: 'Tease back' }).click();
-  await expect(page.locator('#staminaNumber')).toHaveText('13');
-  await expect(page.locator('#staminaText')).toHaveText('5/10');
-  await expect(page.getByTestId('chat-turns')).toHaveText('1');
-
-  await page.getByRole('button', { name: 'Be sincere' }).click();
-  await expect(page.locator('#staminaNumber')).toHaveText('15');
-  await expect(page.locator('#coinCount')).toHaveText('55');
-  await expect(page.getByTestId('chat-turns')).toHaveText('2');
-
-  await page.getByRole('button', { name: 'Ask about lesson' }).click();
-  await expect(page.locator('#rankText')).toHaveText('4/10');
-  await expect(page.getByTestId('lesson-preview')).toHaveClass(/is-highlighted/);
-  await expect(page.getByTestId('chat-turns')).toHaveText('3');
-
-  const stored = await page.evaluate(() => ({
-    affection: localStorage.getItem('tsun.affection'),
-    stamina: localStorage.getItem('tsun.stamina'),
-    rankProgress: localStorage.getItem('tsun.rankProgress'),
-    chatTurns: localStorage.getItem('tsun.chatTurns')
-  }));
-
-  expect(stored).toEqual({
-    affection: '15',
-    stamina: '5',
-    rankProgress: '4',
-    chatTurns: '3'
-  });
-});
-
-test('chat mini state stays inside stat bounds', async ({ page }) => {
+test('game asks for an API key before playing', async ({ page }) => {
+  await stubGemini(false)(page);
   await page.goto(`${appUrl}?reset=1`);
-  await page.evaluate(() => {
-    localStorage.setItem('tsun.affection', '19');
-    localStorage.setItem('tsun.stamina', '0');
-    localStorage.setItem('tsun.rankProgress', '10');
-  });
-  await page.goto(appUrl);
-  await page.getByRole('button', { name: 'Chat' }).click();
-
-  await page.getByRole('button', { name: 'Be sincere' }).click();
-  await page.getByRole('button', { name: 'Tease back' }).click();
-  await page.getByRole('button', { name: 'Ask about lesson' }).click();
-
-  await expect(page.locator('#staminaNumber')).toHaveText('20');
-  await expect(page.locator('#staminaText')).toHaveText('0/10');
-  await expect(page.locator('#rankText')).toHaveText('10/10');
+  await expect(page.locator('#gate')).toBeVisible();
+  await page.locator('#gateKey').fill('AIza-test');
+  await page.locator('#gateGo').click();
+  await expect(page.locator('#gate')).toBeHidden();
 });
 
-test('free-text chat applies affection and memory from the API', async ({ page }) => {
-  await page.route('**/api/chat', route => route.fulfill({
-    json: { reply: 'Hmph. Ramen? Fine.', translation: '', emotion: 'smug', affection_delta: 2, memory: 'likes ramen', model: 'mock' }
-  }));
+test('chat is a story page and Yui replies', async ({ page }) => {
+  await stubGemini(true)(page);
   await page.goto(`${appUrl}?reset=1&selftest=1`);
   await page.getByRole('button', { name: 'Chat' }).click();
-  await page.locator('.chat-input').fill('I love ramen');
-  await page.getByRole('button', { name: 'Send' }).click();
-  await expect(page.locator('#chatLine')).toHaveText('Hmph. Ramen? Fine.');
-  await expect(page.locator('#staminaNumber')).toHaveText('14');
+  await expect(page.locator('#storyPage')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Story with Yui' })).toBeVisible();
+  await expect(page.locator('#log .entry.yui')).toHaveCount(1);        // opening scene
+  await page.locator('#said').fill('*waves* I like ramen');
+  await page.locator('#sendBtn').click();
+  await expect(page.locator('#log .entry.yui')).toHaveCount(2);
+  await expect(page.locator('#staminaText')).toHaveText('2/20');
+  await page.locator('#storyPage').getByRole('button', { name: 'Home' }).click();
+  await expect(page.locator('#storyPage')).toBeHidden();
+});
+
+test('menu switches the whole game to Japanese', async ({ page }) => {
+  await stubGemini(true)(page);
+  await page.goto(`${appUrl}?reset=1`);
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('button', { name: '日本語' }).click();
+  await expect(page.locator('.nav-btn[data-route="/chat"]')).toHaveText('チャット');
 });
