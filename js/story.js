@@ -134,54 +134,41 @@
   G._parseTagged = parseTagged;
 
   // ---------- Gemini streaming with model fallback ----------
-//   async function streamGemini(system, contents, onText) {
-//     const key = G.getKey(); let full = '', err;
-//     for (const model of G.MODELS) {
-//       const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 25000);
-//       try {
-//         const r = await fetch(`${G.API}/${model}:streamGenerateContent?alt=sse`, {
-//           method: 'POST', signal: ctrl.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-//           body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents, generationConfig: { temperature: 1, maxOutputTokens: 800 } })
-//         });
-//         if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { status: r.status, detail: (await r.text()).slice(0, 300) });
-//         const reader = r.body.getReader(), dec = new TextDecoder(); let buf = '';
-//         for (;;) {
-//           const { done, value } = await reader.read(); if (done) break;
-//           buf += dec.decode(value, { stream: true }); let i;
-//           while ((i = buf.indexOf('\n')) >= 0) {
-//             const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
-//             if (!line.startsWith('data:')) continue;
-//             try {
-//               const d = JSON.parse(line.slice(5)), tx = (d.candidates?.[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join('');
-//               if (tx) { full += tx; onText(full); }
-//             } catch { /* partial json line */ }
-//           }
-//         }
-//         clearTimeout(timer);
-//         if (!full) throw new Error('Empty reply');
-//         return { text: full, model };
-//       } catch (e) {
-//         clearTimeout(timer); err = e; console.warn(`[${model}]`, e.message, e.detail || '');
-//         if (full) return { text: full, model };            // keep a partial reply
-//         if (e.status === 401 || e.status === 403 || /API key|API_KEY/i.test(e.detail || '')) break; // key problem: fallback model will not help
-//       }
-//     }
-//     throw err || new Error('All models failed');
-//   }
-
-// ---------- Backend API call instead of direct browser fetch ----------
-  async function callBackendChat(payload) {
-    const r = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!r.ok) {
-      const errData = await r.json().catch(() => ({}));
-      throw Object.assign(new Error(errData.error || 'HTTP ' + r.status), { status: r.status, detail: errData.detail || '' });
+  async function streamGemini(system, contents, onText) {
+    const key = G.getKey(); let full = '', err;
+    for (const model of G.MODELS) {
+      const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 25000);
+      try {
+        const r = await fetch(`${G.API}/${model}:streamGenerateContent?alt=sse`, {
+          method: 'POST', signal: ctrl.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+          body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents, generationConfig: { temperature: 1, maxOutputTokens: 800 } })
+        });
+        if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { status: r.status, detail: (await r.text()).slice(0, 300) });
+        const reader = r.body.getReader(), dec = new TextDecoder(); let buf = '';
+        for (;;) {
+          const { done, value } = await reader.read(); if (done) break;
+          buf += dec.decode(value, { stream: true }); let i;
+          while ((i = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+            if (!line.startsWith('data:')) continue;
+            try {
+              const d = JSON.parse(line.slice(5)), tx = (d.candidates?.[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join('');
+              if (tx) { full += tx; onText(full); }
+            } catch { /* partial json line */ }
+          }
+        }
+        clearTimeout(timer);
+        if (!full) throw new Error('Empty reply');
+        return { text: full, model };
+      } catch (e) {
+        clearTimeout(timer); err = e; console.warn(`[${model}]`, e.message, e.detail || '');
+        if (full) return { text: full, model };            // keep a partial reply
+        if (e.status === 401 || e.status === 403 || /API key|API_KEY/i.test(e.detail || '')) break; // key problem: fallback model will not help
+      }
     }
-    return await r.json();
+    throw err || new Error('All models failed');
   }
+
 
   // ---------- prompt ----------
   function buildSystem(c) {
@@ -234,128 +221,33 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
   }
 
   // ---------- one Yui reply ----------
-//   async function yuiTurn(c) {
-//     const d = newYuiEntry(), tw = typewriter(d); let parsed;
-//     try {
-//       const res = await streamGemini(buildSystem(c), toContents(), txt => { parsed = parseTagged(txt); tw.feed(parsed); });
-//       parsed = parseTagged(res.text); tw.feed(parsed); tw.end(); await tw.done;
-//       const m = parseMeta(parsed.m), em = ['neutral', 'flustered', 'annoyed', 'smug', 'soft', 'sad', 'happy'].includes(m.emotion) ? m.emotion : 'neutral';
-//       let delta = clamp(Math.round(Number(m.affection_delta) || 0), -2, 2); if (S.affection <= 3) delta = Math.min(delta, 1);
-//       if (c.gift) delta = Math.max(delta, 1);
-//       const before = G.stageIdx(S.affection); S.affection = clamp(S.affection + delta, 0, 20);
-//       if (m.memory && !S.memories.includes(m.memory)) S.memories = [String(m.memory).slice(0, 80), ...S.memories].slice(0, 10);
-//       if (c.daily) S.dailyAsked = S.day; if (c.returning) S.greeted = true;
-//       S.entries.push({ k: 'y', n: parsed.n.text, s: parsed.s.text, t: parsed.t.text, raw: res.text.slice(0, 1200), em });
-//       lastSpeech = parsed.s.text || lastSpeech;
-//       setEmotion(em, m.emote); G.voice(em);
-//       if (delta > 0) { G.sfx('chime'); G.toast(t('aff_up', delta)); const r = $('#scene', page).getBoundingClientRect(); G.burst(r.left + r.width * .6, r.top + r.height * .35, 4 + delta * 2); }
-//       else if (delta < 0) G.toast(t('aff_down', delta));
-//       else G.sfx('pop');
-//       const after = G.stageIdx(S.affection);
-//       if (after > before && !S.cgs.includes(after)) { S.cgs.push(after); S.gems += 20; G.save(); setTimeout(() => G.showCG(after), 700); }
-//       if (S.eventRun) S.eventRun.k++;
-//       G.save(); updateScene(); return true;
-//     } catch (e) {
-//       d.remove(); G.sfx('error'); console.warn('yuiTurn failed', e);
-//       const bad = e.status === 401 || e.status === 403 || /API key|API_KEY/i.test(e.detail || '');
-//       if (bad) { G.clearKey(); G.showGate('invalid'); }
-//       const box2 = el('div', 'entry err', `${esc(t('err'))} <button class="chip-btn" type="button">${t('retry')}</button>`); log.append(box2); scrollEnd();
-//       $('button', box2).addEventListener('click', async () => { if (busy) return; box2.remove(); await run(null, c); });
-//       return false;
-//     }
-//   }
-
-// ---------- one Yui reply via backend ----------
   async function yuiTurn(c) {
-    const d = newYuiEntry();
-    // Show typing state immediately
-    scrollEnd();
-    
+    const d = newYuiEntry(), tw = typewriter(d); let parsed;
     try {
-      // Build payload matching what chat.js expects
-      const payload = {
-        affection: S.affection,
-        mood: G.moodId ? G.moodId() : 'annoyed',
-        event: S.eventRun ? S.eventRun.id : null,
-        lang: L(),
-        memories: S.memories,
-        username: S.username || '',
-        history: S.entries.slice(-14).map(e => ({
-          role: e.k === 'y' ? 'model' : 'user',
-          text: e.text || e.s || e.n || ''
-        })).filter(h => h.text)
-      };
-
-      const res = await callBackendChat(payload);
-      
-      // Remove typing element and render the response text cleanly
-      d.remove();
-      
-      // Create final entry container
-      const entryDiv = el('div', 'entry yui', `<p class="entry-n"></p><div class="entry-s"><span class="who">Yui</span><span class="txt">${esc(res.reply)}</span></div>${res.translation ? `<p class="entry-t">${esc(res.translation)}</p>` : ''}`);
-      log.append(entryDiv);
-      scrollEnd();
-
-      const em = res.emotion || 'neutral';
-      let delta = clamp(Math.round(Number(res.affection_delta) || 0), -2, 2); 
-      if (S.affection <= 3) delta = Math.min(delta, 1);
+      const res = await streamGemini(buildSystem(c), toContents(), txt => { parsed = parseTagged(txt); tw.feed(parsed); });
+      parsed = parseTagged(res.text); tw.feed(parsed); tw.end(); await tw.done;
+      const m = parseMeta(parsed.m), em = ['neutral', 'flustered', 'annoyed', 'smug', 'soft', 'sad', 'happy'].includes(m.emotion) ? m.emotion : 'neutral';
+      let delta = clamp(Math.round(Number(m.affection_delta) || 0), -2, 2); if (S.affection <= 3) delta = Math.min(delta, 1);
       if (c.gift) delta = Math.max(delta, 1);
-
-      const before = G.stageIdx(S.affection); 
-      S.affection = clamp(S.affection + delta, 0, 20);
-
-      if (res.memory && !S.memories.includes(res.memory)) {
-        S.memories = [String(res.memory).slice(0, 80), ...S.memories].slice(0, 10);
-      }
-      if (c.daily) S.dailyAsked = S.day; 
-      if (c.returning) S.greeted = true;
-
-      S.entries.push({ k: 'y', s: res.reply, t: res.translation, em });
-      lastSpeech = res.reply || lastSpeech;
-      
-      setEmotion(em, ''); 
-      G.voice(em);
-
-      if (delta > 0) { 
-        G.sfx('chime'); 
-        G.toast(t('aff_up', delta)); 
-        const r = $('#scene', page).getBoundingClientRect(); 
-        G.burst(r.left + r.width * .6, r.top + r.height * .35, 4 + delta * 2); 
-      } else if (delta < 0) {
-        G.toast(t('aff_down', delta));
-      } else {
-        G.sfx('pop');
-      }
-
+      const before = G.stageIdx(S.affection); S.affection = clamp(S.affection + delta, 0, 20);
+      if (m.memory && !S.memories.includes(m.memory)) S.memories = [String(m.memory).slice(0, 80), ...S.memories].slice(0, 10);
+      if (c.daily) S.dailyAsked = S.day; if (c.returning) S.greeted = true;
+      S.entries.push({ k: 'y', n: parsed.n.text, s: parsed.s.text, t: parsed.t.text, raw: res.text.slice(0, 1200), em });
+      lastSpeech = parsed.s.text || lastSpeech;
+      setEmotion(em, m.emote); G.voice(em);
+      if (delta > 0) { G.sfx('chime'); G.toast(t('aff_up', delta)); const r = $('#scene', page).getBoundingClientRect(); G.burst(r.left + r.width * .6, r.top + r.height * .35, 4 + delta * 2); }
+      else if (delta < 0) G.toast(t('aff_down', delta));
+      else G.sfx('pop');
       const after = G.stageIdx(S.affection);
-      if (after > before && !S.cgs.includes(after)) { 
-        S.cgs.push(after); 
-        S.gems += 20; 
-        G.save(); 
-        setTimeout(() => G.showCG(after), 700); 
-      }
+      if (after > before && !S.cgs.includes(after)) { S.cgs.push(after); S.gems += 20; G.save(); setTimeout(() => G.showCG(after), 700); }
       if (S.eventRun) S.eventRun.k++;
-      
-      G.save(); 
-      updateScene(); 
-      return true;
+      G.save(); updateScene(); return true;
     } catch (e) {
-      d.remove(); 
-      G.sfx('error'); 
-      console.warn('yuiTurn failed', e);
+      d.remove(); G.sfx('error'); console.warn('yuiTurn failed', e);
       const bad = e.status === 401 || e.status === 403 || /API key|API_KEY/i.test(e.detail || '');
-      if (bad) { 
-        G.clearKey(); 
-        G.showGate('invalid'); 
-      }
-      const box2 = el('div', 'entry err', `${esc(t('err'))} <button class="chip-btn" type="button">${t('retry')}</button>`); 
-      log.append(box2); 
-      scrollEnd();
-      $('button', box2).addEventListener('click', async () => { 
-        if (busy) return; 
-        box2.remove(); 
-        await run(null, c); 
-      });
+      if (bad) { G.clearKey(); G.showGate('invalid'); }
+      const box2 = el('div', 'entry err', `${esc(t('err'))} <button class="chip-btn" type="button">${t('retry')}</button>`); log.append(box2); scrollEnd();
+      $('button', box2).addEventListener('click', async () => { if (busy) return; box2.remove(); await run(null, c); });
       return false;
     }
   }
