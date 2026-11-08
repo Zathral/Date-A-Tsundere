@@ -139,7 +139,7 @@
     for (const model of G.MODELS) {
       const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 25000);
       try {
-        const r = await fetch(`${G.API}/${model}:streamGenerateContent?alt=sse`, {
+        const r = await fetch(`${G.API}/models/${model}:streamGenerateContent?alt=sse`, {
           method: 'POST', signal: ctrl.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
           body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents, generationConfig: { temperature: 1, maxOutputTokens: 800 } })
         });
