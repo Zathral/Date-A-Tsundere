@@ -46,7 +46,7 @@
   G.dow = () => DOW[L()][(S.day - 1) % 7];
   const slot = () => (G.weekend() ? WE_SLOTS : SLOTS)[S.slot];
   const present = () => !!S.eventRun || S.phone || !!S.talk || (slot().yui && (G.yuiHere ? G.yuiHere() : true));
-  const activeEvent = () => S.eventRun && G.EVENTS.find(e => e.id === S.eventRun.id);
+  const activeEvent = () => S.eventRun && [...G.EVENTS, ...(G.NPC_EVENTS || [])].find(e => e.id === S.eventRun.id);
   let busy = false, rendered = false, lastSpeech = '';
 
   // ---------- DOM ----------
@@ -230,8 +230,8 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
   function buildCtx(extra) {
     const ev = activeEvent(), c = { ...extra, ev }; c.minutes = extra.minutes || 0;
     if (ev) { const i = S.eventRun.k - 1; c.beat = i < 0 ? '' : i < ev.beats.length ? ev.beats[i] : 'CLOSING: wrap the scene up naturally and gently. This is the last reply of the scene.'; }
-    if (present() && S.dailyAsked !== S.day && !ev && slot().id !== 'wake') c.daily = S.dailyQ || DAILY_Q[0];
-    if (present() && !S.greeted && !ev) c.returning = { away: S.awayDays, streak: S.streak };
+    if (present() && S.dailyAsked !== S.day && !ev && slot().id !== 'wake') c.daily = S.dailyQ && !S.talk || DAILY_Q[0];
+    if (present() && !S.greeted && !ev) c.returning = { away: S.awayDays, streak: S.streak } && !S.talk;
     return c;
   }
 
@@ -262,6 +262,7 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
       const m = parseMeta(parsed.m), em = ['neutral', 'flustered', 'annoyed', 'smug', 'soft', 'sad', 'happy'].includes(m.emotion) ? m.emotion : 'neutral';
       let delta = clamp(Math.round(Number(m.affection_delta) || 0), -2, 2); if (S.affection <= 3) delta = Math.min(delta, 1);
       if (c.gift) delta = Math.max(delta, 1);
+      if (c.forceDelta != null) delta = c.forceDelta;
       if (S.talk) { G.npcRel(S.talk, delta); delta = 0; }
       const before = G.stageIdx(S.affection); S.affection = clamp(S.affection + delta, 0, 20);
       if (m.memory && !S.memories.includes(m.memory)) S.memories = [String(m.memory).slice(0, 80), ...S.memories].slice(0, 10);
@@ -321,7 +322,7 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
     if (sl.choose === 'night' && !S.pendingChoice && !S.phone && S.entries.length) return promptChoice('night');
   }
   G.affect = d => {
-    if (!d) return; const b = G.stageIdx(S.affection); S.affection = clamp(S.affection + d, 0, 20); G.toast(t('aff_up', d));
+    if (!d) return; if (S.talk) { G.npcRel(S.talk, d); return G.save(); } const b = G.stageIdx(S.affection); S.affection = clamp(S.affection + d, 0, 20); G.toast(t('aff_up', d));
     const a = G.stageIdx(S.affection); if (a > b && !S.cgs.includes(a)) { S.cgs.push(a); S.gems += 20; setTimeout(() => G.showCG(a), 900); }
     G.save(); updateScene();
   };
@@ -329,14 +330,26 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
   // ---------- choices ----------
   function showChoices(ask, opts) {
     box.innerHTML = `<div class="ask">${esc(ask)}</div>`;
-    opts.forEach(o => {
+    opts.forEach((o, i) => {
       const b = el('button', 'choice-btn', esc(o.label) + (o.locked ? ` 🔒 ${esc(o.locked)}` : '')); b.type = 'button'; b.disabled = !!o.locked;
+      b.style.setProperty('--i', i);
       b.addEventListener('click', () => { box.hidden = true; G.sfx('pop'); o.pick(); }); box.append(b);
     });
     box.hidden = false; $('#moveBtn', page).disabled = true; scrollEnd();
   }
   function showEventChoice(ev) {
-    showChoices(ev.choice.ask[L()], ev.choice.options.map(o => ({ label: o[L()], pick: () => { S.eventRun.picked = 'yes'; G.affect(o.delta); send(`*${o[L()]}*`, { note: o.note }); } })));
+    showChoices(ev.choice.ask[L()], ev.choice.options.map(o => ({
+      label: o[L()] + (o.stat ? ` [${t('st_' + o.stat)}]` : ''),
+      pick: async () => {
+        let d = o.delta, note = o.note;
+        if (o.stat) {
+          const res = await G.rollAction(o.stat, { base: o.base ?? .4, label: o[L()] });
+          d = res.tier === 'great' ? o.delta + 1 : res.tier === 'corny' ? Math.min(0, o.delta - 1) : o.delta;
+          note += ` OUTCOME (decided by the game, follow it): ${G.tierNote(res.tier)}`; sep(G.chanceLine(res));
+        }
+        S.eventRun.picked = 'yes'; G.affect(d); send(`*${o[L()]}*`, { note });
+      }
+    })));
   }
   function promptChoice(kind) {
     S.pendingChoice = kind; G.save();
@@ -371,20 +384,23 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
   }
 
   // ---------- events ----------
+  G.startEvent = ev => {
+    if (busy) return G.toast(t('busy'));
+    G.go('/chat'); if (S.eventRun) return;
+    S.talk = ev.npc || null;
+    S.eventRun = { id: ev.id, k: 0, picked: null, saved: { minute: S.minute, loc: S.loc, weather: S.weather, phone: S.phone, pending: S.pendingChoice } };
+    S.loc = ev.loc; S.minute = ev.time; S.weather = ev.weather || S.weather; S.phone = false; S.pendingChoice = null; box.hidden = true;
+    const s = `— ${t('event_start')}${ev.title[L()]} —`; S.entries.push({ k: 's', text: s }); addSep(s); updateScene(); G.shake();
+    director(`EVENT BEGINS: ${ev.setup} Narrate the opening of the scene and show ${G.speakerName?.() || 'Yui'}'s first reaction.`);
+  };
   G.startNextEvent = () => {
     const ev = G.nextEvent();
     if (!ev) return G.toast(t('all_events_done'));
     if (S.affection < ev.min) return G.toast(t('event_locked', ev.title[L()], ev.min));
-    if (busy) return G.toast(t('busy'));
-    G.go('/chat');
-    if (S.eventRun) return;
-    S.eventRun = { id: ev.id, k: 0, picked: null, saved: { minute: S.minute, loc: S.loc, weather: S.weather, phone: S.phone, pending: S.pendingChoice } };
-    S.loc = ev.loc; S.minute = ev.time; S.weather = ev.weather || S.weather; S.phone = false; S.pendingChoice = null; box.hidden = true;
-    const sep = `— ${t('event_start')}${ev.title[L()]} —`; S.entries.push({ k: 's', text: sep }); addSep(sep); updateScene(); G.shake();
-    director(`EVENT BEGINS: ${ev.setup} Narrate the opening of the scene and show Yui's first reaction.`);
+    G.startEvent(ev);
   };
   function finishEvent(ev) {
-    S.eventsDone.push(ev.id); S.gems += 10; S.coins += 20; const sv = S.eventRun.saved; S.eventRun = null;
+    S.eventsDone.push(ev.id); S.gems += 10; S.coins += 20; if (ev.npc) G.npcRel(ev.npc, 2); S.talk = null; const sv = S.eventRun.saved; S.eventRun = null;
     S.minute = sv.minute; S.loc = sv.loc; S.weather = sv.weather; S.phone = sv.phone; G.save();
     G.toast(t('event_clear', ev.title[L()]), 3200); G.sfx('sparkle'); G.petalBurst(20);
     const sep = `— ${ev.title[L()]} ✓ —`; S.entries.push({ k: 's', text: sep }); addSep(sep); updateScene();
@@ -435,5 +451,6 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
   G.on('route', r => { if (r === '/home' && lastSpeech) G.say(lastSpeech.replace(/\n/g, ' ')); });
 
   G.start();
-  G.story = { director, send, update: updateScene, busy: () => busy, slot };
+  const sep = text => { S.entries.push({ k: 's', text }); addSep(text); };
+  G.story = { director, send, update: updateScene, busy: () => busy, slot, present, sep };
 })();

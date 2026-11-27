@@ -129,10 +129,19 @@
   }
 
   G.pixelMount = box => {
-    const c = document.createElement('canvas'); c.width = W; c.height = H; c.className = 'px-scene'; box.replaceChildren(c);
-    const ctx = c.getContext('2d'), st = { loc: 'bedroom', hour: 12, wx: 'clear' }; let f = 0;
-    const draw = () => { if (c.offsetParent) paint(ctx, st.loc, st.hour, st.wx, f); };
+    const c = document.createElement('canvas'), snap = document.createElement('canvas');
+    [c, snap].forEach(x => { x.width = W; x.height = H; x.className = 'px-scene'; }); snap.classList.add('px-snap'); box.replaceChildren(c, snap);
+    const ctx = c.getContext('2d'), sctx = snap.getContext('2d'), st = { key: '', loc: 'bedroom', hour: 12, wx: 'clear' }; let f = 0;
+    const visible = () => c.isConnected && !c.closest('.page:not(.show)');
+    const draw = () => { if (visible()) paint(ctx, st.loc, st.hour, st.wx, f); };
     const id = setInterval(() => { if (!c.isConnected) return clearInterval(id); if (!G.settings.reduceMotion) f++; draw(); }, 100);
-    return { set(loc, hour, wx = 'clear') { Object.assign(st, { loc, hour, wx }); draw(); } };
+    return { set(loc, hour, wx = 'clear') {
+      const key = loc + G.period(hour);
+      if (st.key && key !== st.key && visible() && !G.settings.reduceMotion) {
+        sctx.drawImage(c, 0, 0); snap.style.transition = 'none'; snap.style.opacity = 1; void snap.offsetWidth; snap.style.transition = 'opacity .7s ease'; snap.style.opacity = 0;
+        c.classList.remove('enter'); void c.offsetWidth; c.classList.add('enter');
+      }
+      Object.assign(st, { key, loc, hour, wx }); draw();
+    } };
   };
 })();
