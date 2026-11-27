@@ -27,9 +27,10 @@
 
   // ---------- state ----------
   const DEF = () => ({
-    username: 'mennminnmiiii', coins: 50, gems: 50, affection: 0, day: 1, minute: 420, slot: 0, slotTurns: 0,
+    username: 'Sato', coins: 50, gems: 50, affection: 0, day: 1, minute: 420, slot: 0, slotTurns: 0,
     loc: 'bedroom', weather: 'clear', entries: [], memories: [], gifts: [], inventory: {}, pulls: 0, pity: 0,
     eventsDone: [], cgs: [], streak: 0, lastLogin: '', awayDays: 0, greeted: true, giftReady: false,
+    storyFacts: [], sumTurns: 0, talk: null, rel: {}, xp: { charm: 0, wit: 0, grit: 0, craft: 0 },
     eventRun: null, phone: false, intro: false, dailyQ: '', dailyAsked: 0, pendingChoice: null
   });
   const S = G.S = Object.assign(DEF(), jget('tsun.save', {}));
@@ -195,10 +196,15 @@
 
   // ---------- stage: wide fit + layout wrapper ----------
   G.fit = () => {
-    const W = clamp(Math.round(innerWidth / innerHeight * 675), 1200, 1800), r = document.documentElement.style;
-    r.setProperty('--W', W + 'px'); r.setProperty('--dx', (W - 1200) + 'px'); r.setProperty('--s', Math.min(innerWidth / W, innerHeight / 675)); G.W = W;
+    const vw = document.documentElement.clientWidth || innerWidth;
+    const vh = document.documentElement.clientHeight || innerHeight;
+    const s = Math.min(vw / 1200, vh / 675), W = Math.floor(vw / s), H = Math.floor(vh / s), r = document.documentElement.style;
+    r.setProperty('--W', W + 'px'); r.setProperty('--H', H + 'px');
+    r.setProperty('--dx', (W - 1200) + 'px'); r.setProperty('--dy', (H - 675) + 'px');
+    r.setProperty('--s', s); G.W = W; G.H = H;
   };
   function wrapLayout() {
+    if ($('.layout', G.game)) return;
     const layout = document.createElement('div'); layout.className = 'layout';
     [...G.game.children].forEach(c => { if (!c.matches('.fx-field,.toast')) layout.appendChild(c); });
     G.game.prepend(layout);
@@ -221,12 +227,14 @@
     }
   };
   G.petal = () => {
-    if (G.settings.reduceMotion) return;
-    const f = $('#fxField'), el = document.createElement('span'); el.className = 'fx petal';
+    if (G.settings.reduceMotion || document.hidden) return;
+    const f = $('#fxField'); if (f.querySelectorAll('.petal').length >= 24) return;
+    const el = document.createElement('span'); el.className = 'fx petal';
     el.style.left = `${Math.random() * f.offsetWidth}px`; el.style.top = '-18px';
     el.style.setProperty('--drift', `${38 + Math.random() * 110}px`); el.style.setProperty('--fall', `${6.5 + Math.random() * 4}s`);
     f.appendChild(el); el.addEventListener('animationend', () => el.remove(), { once: true });
   };
+  document.addEventListener('visibilitychange', () => { if (document.hidden) $$('#fxField .petal').forEach(p => p.remove()); });
   G.petalBurst = n => { for (let i = 0; i < n; i++) setTimeout(G.petal, i * 60); };
   G.shake = () => { if (G.settings.reduceMotion) return; G.game.classList.remove('shake'); void G.game.offsetWidth; G.game.classList.add('shake'); };
   let typeT;
@@ -300,10 +308,12 @@
         <label class="chk"><input type="checkbox" data-chk="subs"><span data-t="m_subs"></span></label></section>
       <section><h3 data-t="m_access"></h3><label class="chk"><input type="checkbox" data-chk="reduceMotion"><span data-t="m_motion"></span></label></section>
       <section><h3 data-t="m_account"></h3><p id="mKey"></p><button class="chip-btn" data-act="key" data-t="m_change_key"></button></section>
-      <section><h3 data-t="m_data"></h3><button class="chip-btn danger" data-act="reset" data-t="m_reset"></button></section></div></div>`;
+      <section><h3 data-t="m_data"></h3><div class="row-btns"><button class="chip-btn" data-act="export" data-t="m_export"></button><button class="chip-btn" data-act="import" data-t="m_import"></button></div><input id="saveFile" type="file" accept=".json,application/json" hidden>
+      <button class="chip-btn danger" data-act="reset" data-t="m_reset"></button></section></div></div>`;
     G.game.appendChild(el);
     el.addEventListener('input', e => { const v = e.target.dataset.vol; if (v) G.setSetting(v, +e.target.value); });
     el.addEventListener('change', e => {
+      if (e.target.id === 'saveFile') return importSave(e.target.files[0]);
       const c = e.target.dataset.chk, s = e.target.dataset.sel;
       if (c) G.setSetting(c, e.target.checked); if (s) G.setSetting(s, e.target.value);
     });
@@ -314,8 +324,23 @@
       if (b.hasAttribute('data-close')) closeMenu();
       if (b.dataset.act === 'key') { G.clearKey(); location.reload(); }
       if (b.dataset.act === 'reset' && confirm(t('m_reset_ask'))) { localStorage.removeItem('tsun.save'); location.href = location.pathname; }
+      if (b.dataset.act === 'export') exportSave();
+      if (b.dataset.act === 'import') $('#saveFile', el).click();
     });
     return el;
+  }
+  function exportSave() {
+    const blob = new Blob([JSON.stringify({ game: 'date-a-tsundere', v: 1, save: S }, null, 1)], { type: 'application/json' });
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `tsundere-day${S.day}.json` });
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  async function importSave(file) {
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text()), sv = data.save;
+      if (data.game !== 'date-a-tsundere' || !sv || typeof sv.affection !== 'number') throw 0;
+      localStorage.setItem('tsun.save', JSON.stringify(sv)); location.reload();
+    } catch { G.toast(t('m_load_bad')); }
   }
   function syncMenu() {
     const el = $('#menuPanel');
@@ -325,8 +350,16 @@
     $$('[data-lang]', el).forEach(b => b.classList.toggle('on', b.dataset.lang === G.settings.lang));
     const k = G.getKey(); $('#mKey', el).textContent = t('m_keyset', k ? '••••' + k.slice(-4) : '—');
   }
-  G.openMenu = () => { const el = $('#menuPanel') || buildMenu(); G.applyI18n(); syncMenu(); el.hidden = false; $('.x-btn', el).focus(); };
-  const closeMenu = () => { const el = $('#menuPanel'); if (el) el.hidden = true; };
+  G.openMenu = () => {
+    const el = $('#menuPanel') || buildMenu(); G.applyI18n(); syncMenu();
+    el.classList.remove('closing'); el.hidden = false;
+    $$('.menu-body section', el).forEach((s, i) => { s.style.animationDelay = i * 45 + 'ms'; });
+    $('.x-btn', el).focus();
+  };
+  const closeMenu = () => {
+    const el = $('#menuPanel'); if (!el || el.hidden || el.classList.contains('closing')) return;
+    el.classList.add('closing'); setTimeout(() => { el.hidden = true; el.classList.remove('closing'); }, 200);
+  };
 
   // ---------- API key gate ----------
   G.getKey = () => localStorage.getItem('tsun.apiKey') || sessionStorage.getItem('tsun.apiKey') || '';
@@ -360,6 +393,8 @@
 
   // ---------- start ----------
   G.start = () => {
+    if (G._started) return;
+    G._started = true;
     wrapLayout(); G.fit(); addEventListener('resize', G.fit);
     dailyCheck(); applySettings(); G.say(t('greet'));
     const nameLine = $('.name-line'), input = $('#usernameInput');
