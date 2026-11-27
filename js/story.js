@@ -22,7 +22,8 @@
   ];
   const CHOICES = {
     lunch: [{ loc: 'cafeteria', k: 'lunch_cafeteria' }, { loc: 'rooftop', k: 'lunch_rooftop', minAff: 6 }, { loc: 'classroom', k: 'lunch_classroom' }],
-    after: [{ loc: 'park', k: 'after_park' }, { loc: 'library', k: 'after_library' }, { skip: true, k: 'after_home' }],
+    after: [{ loc: 'park', k: 'after_park' }, { loc: 'library', k: 'after_library' }, { act: 'map', k: 'after_map' }, { skip: true, k: 'after_home' }],
+    map: [{ act: 'map', k: 'after_map' }, { skip: true, k: 'stay_home' }],
     night: [{ act: 'text', k: 'night_text' }, { act: 'sleep', k: 'night_sleep' }]
   };
   const STAGE_BRIEF = [
@@ -33,8 +34,18 @@
     'You are deeply fond of the player but still tsundere. Vulnerable moments happen, then you retreat into denial.'];
   const MOOD_BRIEF = { tired: 'Sleepy and grumpy: short sentences, yawns, low patience.', annoyed: 'Prickly and snappy, but secretly still listening.', happy: 'Secretly in a good mood; softer than usual and she hates that it shows.' };
 
-  const slot = () => SLOTS[S.slot];
-  const present = () => !!S.eventRun || S.phone || slot().yui;
+  const PACE = 2; // 1 = old speed, 2 = twice as many turns per part of the day
+  const WE = [
+    { id: 'wwake', start: 480, end: 540, turns: 3, loc: 'bedroom', yui: false, note: 'Weekend morning, no school. The player wakes up late at home. Yui is NOT here. Narrate the lazy morning and the free day ahead.' },
+    { id: 'wam', start: 540, end: 780, turns: 6, loc: null, choose: 'map', yui: true, note: 'A free weekend morning in town.' },
+    { id: 'wpm', start: 780, end: 1080, turns: 6, loc: null, choose: 'map', yui: true, note: 'A free weekend afternoon in town.' }];
+  [...SLOTS, ...WE].forEach(s => { if (s.turns < 99) s.turns *= PACE; });
+  const WE_SLOTS = [...WE, SLOTS[6], SLOTS[7]];
+  const DOW = { en: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], ja: ['月', '火', '水', '木', '金', '土', '日'] };
+  G.weekend = () => (S.day - 1) % 7 >= 5;
+  G.dow = () => DOW[L()][(S.day - 1) % 7];
+  const slot = () => (G.weekend() ? WE_SLOTS : SLOTS)[S.slot];
+  const present = () => !!S.eventRun || S.phone || !!S.talk || (slot().yui && (G.yuiHere ? G.yuiHere() : true));
   const activeEvent = () => S.eventRun && G.EVENTS.find(e => e.id === S.eventRun.id);
   let busy = false, rendered = false, lastSpeech = '';
 
@@ -58,14 +69,16 @@
     $('#hudStage', page).textContent = `${t('stage')[G.stageIdx(S.affection)]} · ♡ ${S.affection}/20 · ${t('slot_' + slot().id)}`;
   };
   const setBusy = b => { busy = b; said.disabled = b; $('#sendBtn', page).disabled = b; $('#moveBtn', page).disabled = b || !!S.pendingChoice || !!S.eventRun; $('#giftBtn', page).disabled = b; };
-
+  
+  let px;
   function updateScene() {
     const hour = Math.floor(S.minute / 60), sc = $('#scene', page), loc = S.phone ? 'yui_room' : S.loc;
-    $('#env', page).innerHTML = G.sceneSVG(loc, hour) + (G.USE_ENV_IMAGES ? `<img class="env-img" src="assets/env/${loc}.png" alt="" onerror="this.remove()">` : '');
+    (px ||= G.pixelMount($('#env', page))).set(loc, hour, S.weather);
     sc.dataset.wx = S.weather; sc.dataset.out = OUTDOOR.includes(S.loc) && !S.phone ? 1 : 0;
-    $('#hudLoc', page).textContent = t('loc_' + loc); $('#hudTime', page).textContent = `${t('day')} ${S.day} · ${G.clock()}`; $('#hudWx', page).textContent = WX[S.weather] || '';
+    $('#hudLoc', page).textContent = t('loc_' + loc); $('#hudTime', page).textContent = `${t('day')} ${S.day} (${G.dow()}) · ${G.clock()}`; $('#hudWx', page).textContent = WX[S.weather] || '';
     $('#yui', page).classList.toggle('away', !present());
     labelUi(); G.renderState();
+    G.emit('scene');
   }
   function setEmotion(em, emote) {
     const y = $('#yui', page); y.className = y.className.replace(/\bemo-\w+/g, '').trim() + ' emo-' + em;
@@ -81,10 +94,10 @@
     if (e.k === 'p') return addPlayer(e.text);
     if (e.k === 's') return addSep(e.text);
     if (e.k !== 'y') return;
-    log.append(el('div', 'entry yui', `<p class="entry-n">${esc(e.n || '')}</p>${e.s ? `<div class="entry-s"><span class="who">Yui</span><span class="txt">${esc(e.s)}</span></div>` : ''}${e.t && L() === 'ja' && G.settings.subs ? `<p class="entry-t">${esc(e.t)}</p>` : ''}`));
+    log.append(el('div', 'entry yui', `<p class="entry-n">${esc(e.n || '')}</p>${e.s ? `<div class="entry-s"><span class="who">${esc(e.who || 'Yui')}</span><span class="txt">${esc(e.s)}</span></div>` : ''}${e.t && L() === 'ja' && G.settings.subs ? `<p class="entry-t">${esc(e.t)}</p>` : ''}`));
   }
   const newYuiEntry = () => {
-    const d = el('div', 'entry yui', `<div class="typing" aria-label="${t('thinking')}"><i></i><i></i><i></i></div><p class="entry-n"></p><div class="entry-s"><span class="who">Yui</span><span class="txt"></span></div><p class="entry-t"></p>`);
+    const d = el('div', 'entry yui', `<div class="typing" aria-label="${t('thinking')}"><i></i><i></i><i></i></div><p class="entry-n"></p><div class="entry-s"><span class="who">${esc(G.speakerName?.() || 'Yui')}</span><span class="txt"></span></div><p class="entry-t"></p>`);
     log.append(d); scrollEnd(); return d;
   };
 
@@ -185,11 +198,13 @@ RELATIONSHIP: ${G.tl('en', 'stage')[si]} (affection ${S.affection}/20). ${STAGE_
 MOOD: ${MOOD_BRIEF[G.moodId()]} Time-of-day matters: grumpy and half-asleep in the morning, softer and more guarded-down late at night.
 ${ev ? `SPECIAL EVENT: "${ev.title.en}". ${ev.setup}` : ''}${c.beat ? `\nSTORY BEAT FOR THIS REPLY (make it happen naturally): ${c.beat}` : ''}${c.note ? `\nPLAYER CHOICE JUST MADE: ${c.note}` : ''}
 TIME PASSES: about ${c.minutes || 0} minutes passed since your last reply; mention it only if natural.
-${c.gift ? `PLAYER JUST GAVE YUI A GIFT: ${c.gift.tag} (rarity ${c.gift.r}). React in character: flustered denial, secret delight, and remember it. Gifts raise affection by about ${c.gift.r === 'SSR' ? 2 : 1}.` : ''}
+${c.gift ? `PLAYER JUST GAVE ${(G.speakerName?.() || 'Yui').toUpperCase()} A GIFT: ${c.gift.tag} (rarity ${c.gift.r}). React in character: flustered denial, secret delight, and remember it. Gifts raise affection by about ${c.gift.r === 'SSR' ? 2 : 1}.` : ''}
 ${c.daily ? `DAILY QUESTION: sometime this reply or soon, Yui asks the player, in her tsundere way: "${c.daily}". Ask it only once.` : ''}
 ${c.returning ? (c.returning.away > 0 ? `The player was away for ${c.returning.away} real-world day(s). Yui is annoyed they vanished but secretly relieved. Do not mention real-world days literally; say things like "you disappeared".` : `The player has shown up ${c.returning.streak} days in a row. Yui pretends not to notice but is pleased.`) : ''}
 THINGS YUI HAS LEARNED ABOUT THE PLAYER: ${S.memories.length ? S.memories.join('; ') : 'nothing yet'}. Bring one up unprompted now and then.
 GIFTS ALREADY GIVEN: ${S.gifts.length ? S.gifts.slice(-6).join(', ') : 'none'}. She may reference them ("I'm not wearing this because I like it").
+STORY SO FAR (long-term memory, treat as true): ${S.storyFacts.length ? S.storyFacts.join(' | ') : 'nothing yet'}
+${G.promptExtra ? G.promptExtra(c) : ''}
 
 INPUT: lines from the player in *asterisks* are actions; other text is speech. Lines starting with [Director] are stage directions, not the player speaking: narrate them. Never speak or act for the player.
 
@@ -220,6 +235,24 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
     return c;
   }
 
+  async function summarize() {
+    if (!G.getKey()) return;
+    const scenes = S.entries.slice(-24).map(e => e.k === 'p' ? `Player: ${e.text}` : e.k === 'y' ? `${e.who || 'Yui'}: ${e.n} "${e.s}"` : e.k === 'd' ? `[Director] ${e.text}` : '').filter(Boolean).join('\n');
+    const prompt = `You maintain the long-term memory of a slice-of-life dating sim.\nCurrent facts:\n${S.storyFacts.map(f => '- ' + f).join('\n') || '(none)'}\n\nRecent scenes:\n${scenes}\n\nReturn ONLY a JSON array of strings: the updated fact list. Keep still-important old facts, merge duplicates, and add 3-5 new facts from the recent scenes (promises, secrets, plot beats, relationships, things the player did or said). Max 12 facts, each under 20 words, in English.`;
+    for (const model of [...G.MODELS].reverse()) { // fallback model first, to spare the main one
+      try {
+        const r = await fetch(`${G.API}/models/${model}:generateContent`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': G.getKey() },
+          body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: .2, maxOutputTokens: 600, responseMimeType: 'application/json' } })
+        });
+        if (!r.ok) continue;
+        const d = await r.json(), raw = (d.candidates?.[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join('');
+        const arr = JSON.parse(raw.replace(/```json|```/g, ''));
+        if (Array.isArray(arr) && arr.length) { S.storyFacts = arr.slice(0, 12).map(x => String(x).slice(0, 160)); G.save(); return; }
+      } catch { /* try next model */ }
+    }
+  }
+
   // ---------- one Yui reply ----------
   async function yuiTurn(c) {
     const d = newYuiEntry(), tw = typewriter(d); let parsed;
@@ -229,10 +262,11 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
       const m = parseMeta(parsed.m), em = ['neutral', 'flustered', 'annoyed', 'smug', 'soft', 'sad', 'happy'].includes(m.emotion) ? m.emotion : 'neutral';
       let delta = clamp(Math.round(Number(m.affection_delta) || 0), -2, 2); if (S.affection <= 3) delta = Math.min(delta, 1);
       if (c.gift) delta = Math.max(delta, 1);
+      if (S.talk) { G.npcRel(S.talk, delta); delta = 0; }
       const before = G.stageIdx(S.affection); S.affection = clamp(S.affection + delta, 0, 20);
       if (m.memory && !S.memories.includes(m.memory)) S.memories = [String(m.memory).slice(0, 80), ...S.memories].slice(0, 10);
       if (c.daily) S.dailyAsked = S.day; if (c.returning) S.greeted = true;
-      S.entries.push({ k: 'y', n: parsed.n.text, s: parsed.s.text, t: parsed.t.text, raw: res.text.slice(0, 1200), em });
+      S.entries.push({ k: 'y', n: parsed.n.text, s: parsed.s.text, t: parsed.t.text, raw: res.text.slice(0, 1200), who: G.speakerName?.() || 'Yui', em });
       lastSpeech = parsed.s.text || lastSpeech;
       setEmotion(em, m.emote); G.voice(em);
       if (delta > 0) { G.sfx('chime'); G.toast(t('aff_up', delta)); const r = $('#scene', page).getBoundingClientRect(); G.burst(r.left + r.width * .6, r.top + r.height * .35, 4 + delta * 2); }
@@ -241,6 +275,7 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
       const after = G.stageIdx(S.affection);
       if (after > before && !S.cgs.includes(after)) { S.cgs.push(after); S.gems += 20; G.save(); setTimeout(() => G.showCG(after), 700); }
       if (S.eventRun) S.eventRun.k++;
+      if (++S.sumTurns >= 10) { S.sumTurns = 0; summarize(); }
       G.save(); updateScene(); return true;
     } catch (e) {
       d.remove(); G.sfx('error'); console.warn('yuiTurn failed', e);
@@ -310,8 +345,9 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
       pick: () => {
         S.pendingChoice = null;
         if (o.act === 'sleep') return endDay();
+        if (o.act === 'map') return G.openMap();
         if (o.act === 'text') { S.phone = true; S.loc = 'bedroom'; updateScene(); return director('The player picks up their phone and texts Yui. Narrate the phone lighting up in her dark room and her reaction to getting a message from the player so late.'); }
-        if (o.skip) return gotoSlot(S.slot + 1, 'The player says goodbye to Yui and walks home alone. Narrate the parting and the walk.');
+        if (o.skip) return gotoSlot(S.slot + 1, kind === 'map' ? 'The player stays home and lets the hours drift by.' : 'The player says goodbye to Yui and walks home alone. Narrate the parting and the walk.');
         S.loc = o.loc; updateScene(); director(`Arrival: ${slot().note} The player chooses to go to: ${G.STR.en['loc_' + o.loc]}. Narrate the arrival and Yui's reaction.`);
       }
     }));
@@ -328,10 +364,10 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
   }
   const advance = () => (slot().id === 'night' ? null : gotoSlot(S.slot + 1));
   async function endDay() {
-    S.day++; S.slot = 0; S.slotTurns = 0; S.minute = 420; S.loc = 'bedroom'; S.phone = false; S.dailyQ = DAILY_Q[(S.day - 1) % DAILY_Q.length];
+    S.day++; S.slot = 0; S.slotTurns = 0; S.minute = 420; S.loc = 'bedroom'; S.phone = false; S.dailyQ = DAILY_Q[(S.day - 1) % DAILY_Q.length]; S.talk = null;
     const r = Math.random(); S.weather = r < .6 ? 'clear' : r < .8 ? 'cloudy' : 'rain'; G.save();
     const sep = `— ${t('day')} ${S.day} · ${G.clock()} —`; S.entries.push({ k: 's', text: sep }); addSep(sep); updateScene();
-    await director('A new morning. The player slept and wakes up. Narrate the new day and the weather. Yui is not here yet.');
+    await director('A new morning. The player slept and wakes up. Narrate the new day and the weather. Yui is not here yet.' + (G.weekend() ? ' It is the weekend, so no school: narrate a lazy morning and the free day ahead.' : ''));
   }
 
   // ---------- events ----------
@@ -365,7 +401,7 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
       const b = el('button', 'chip-btn', `<b>${it.r}</b> ${esc(G.itemName(it))} x${S.inventory[it.id]}`); b.type = 'button';
       b.addEventListener('click', () => {
         if (busy) return; pop.hidden = true; S.inventory[it.id]--; S.gifts.push(it.en); G.save();
-        send(`*gives Yui: ${it.en}*`, { gift: it });
+        send(`*gives ${G.speakerName?.() || 'Yui'}: ${it.en}*`, { gift: it });
       }); pop.append(b);
     });
     pop.hidden = false;
@@ -399,4 +435,5 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
   G.on('route', r => { if (r === '/home' && lastSpeech) G.say(lastSpeech.replace(/\n/g, ' ')); });
 
   G.start();
+  G.story = { director, send, update: updateScene, busy: () => busy, slot };
 })();

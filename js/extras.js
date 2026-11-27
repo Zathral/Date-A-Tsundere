@@ -99,9 +99,9 @@
   G.showCG = (idx, replay) => {
     const cg = CG[idx]; if (!cg) return;
     const el = document.createElement('div'); el.className = 'overlay cg'; el.tabIndex = 0;
-    el.innerHTML = `<div class="cg-frame"><div class="cg-art">${G.sceneSVG(cg.loc, cg.hour)}<img src="assets/main-character.png" alt=""></div>
+    el.innerHTML = `<div class="cg-frame"><div class="cg-art"><div class="env-px"></div><img src="assets/main-character.png" alt=""></div>
       <h3>${G.t('stage')[idx]}${replay ? '' : ' · ' + G.t('cg_unlock')}</h3><p>${cg[L()]}</p><small>${G.t('cg_tap')}</small></div>`;
-    G.game.appendChild(el); el.focus(); G.sfx('sparkle'); G.voice('soft'); G.petalBurst(replay ? 12 : 40);
+    G.game.appendChild(el); G.pixelMount($('.env-px', el)).set(cg.loc, cg.hour); el.focus(); G.sfx('sparkle'); G.voice('soft'); G.petalBurst(replay ? 12 : 40);
     el.addEventListener('click', () => el.remove()); el.addEventListener('keydown', () => el.remove());
   };
 
@@ -112,14 +112,17 @@
     const x = Math.random(); let r = x < .02 ? 'SSR' : x < .12 ? 'SR' : x < .4 ? 'R' : 'N';
     if (S.pity >= 30) r = 'SSR'; else if (S.pulls % 10 === 0 && (r === 'N' || r === 'R')) r = 'SR';
     if (r === 'SSR') S.pity = 0;
-    const pool = G.ITEMS.filter(i => i.r === r), it = pool[Math.floor(Math.random() * pool.length)];
+    const bn = G.activeBanner?.();
+    const lim = bn && Math.random() < .5 ? G.ITEMS.filter(i => i.banner === bn.id && i.r === r) : [];
+    const pool = lim.length ? lim : G.ITEMS.filter(i => i.r === r && !i.shop && !i.banner), it = pool[Math.floor(Math.random() * pool.length)];
     S.inventory[it.id] = (S.inventory[it.id] || 0) + 1; return it;
   };
   const chip = it => `<span class="item" style="--c:${RAR[it.r]}"><b>${it.r}</b> ${G.itemName(it)}</span>`;
   let lastPull = [];
   const renderGacha = () => {
+    const bn = G.activeBanner?.();
     const inv = G.ITEMS.filter(i => S.inventory[i.id]).map(i => `${chip(i)}<i>x${S.inventory[i.id]}</i>`).join('');
-    gp.innerHTML = `<div class="sheet"><h2>${G.t('gacha_title')}</h2><p class="muted">💎 ${S.gems} ${G.t('gems')} · ${G.t('gacha_pity', Math.max(1, 30 - S.pity))}</p>
+    gp.innerHTML = `<div class="sheet"><h2>${G.t('gacha_title')}</h2><p class="muted">💎 ${S.gems} ${G.t('gems')} · ${G.t('gacha_pity', Math.max(1, 30 - S.pity))}</p>${bn ? `<p class="muted">🎀 ${t('gacha_banner', bn[L()])}</p>` : ''}
       <div class="row-btns"><button class="chip-btn" data-pull="1">${G.t('gacha_pull1')}</button><button class="chip-btn" data-pull="10">${G.t('gacha_pull10')}</button></div>
       <div class="results" aria-live="polite">${lastPull.map(chip).join('')}</div><h3>${G.t('gacha_inv')}</h3><div class="inv">${inv || `<span class="muted">${G.t('j_none')}</span>`}</div><p class="muted">${G.t('gacha_tip')}</p></div>`;
   };
@@ -141,7 +144,7 @@
     const list = a => a.length ? `<ul>${a.map(x => `<li>${x}</li>`).join('')}</ul>` : `<p class="muted">${G.t('j_none')}</p>`;
     jp.innerHTML = `<div class="sheet"><h2>${G.t('j_title')}</h2><p>${G.t('day')} ${S.day} · ${G.t('stage')[si]} · ♡ ${S.affection}/20 · ${G.t('streak', S.streak)}</p>
       <div class="cols"><div><h3>${G.t('j_events')}</h3><ul class="evs">${evs}</ul><h3>${G.t('j_cgs')}</h3><div class="row-btns">${cgs}</div></div>
-      <div><h3>${G.t('j_mem')}</h3>${list(S.memories)}<h3>${G.t('j_gifts')}</h3>${list(S.gifts.slice(-8))}</div></div></div>`;
+      <div><h3>${G.t('j_mem')}</h3>${list(S.memories)}<h3>${G.t('j_story')}</h3>${list(S.storyFacts)}<h3>${G.t('j_gifts')}</h3>${list(S.gifts.slice(-8))}</div></div></div>`;
   };
   jp.addEventListener('click', e => { const b = e.target.closest('[data-cg]'); if (b) G.showCG(+b.dataset.cg, true); });
   G.pages.journal = { show: on => { jp.classList.toggle('show', on); if (on) renderJournal(); } };

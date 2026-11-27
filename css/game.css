@@ -65,7 +65,10 @@
 .emote { position: absolute; top: 12%; left: 62%; font-size: 40px; font-weight: 900; color: var(--pink); text-shadow: 2px 2px #fff, 0 3px var(--blue); opacity: 0; }
 .emote.pop { animation: emote-pop 1.6s ease forwards; }
 .scene-hud { position: absolute; left: 16px; top: 14px; z-index: 2; display: flex; flex-wrap: wrap; gap: 8px; max-width: calc(100% - 32px); }
-.scene[data-out="1"][data-wx="rain"]::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(105deg, rgba(255,255,255,.4) 0 2px, transparent 2px 16px); animation: rain .45s linear infinite; }
+.px-scene { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+.env-px { position: absolute; inset: 0; }
+.scene .yui.npc { image-rendering: pixelated; height: 78%; animation: npc-bob 1.1s steps(2) infinite; }
+@keyframes npc-bob { 50% { transform: translateY(-1.2%); } }
 .scene[data-wx="rain"]::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: rgba(40,60,110,.18); }
 @keyframes rain { to { background-position: -24px 48px; } }
 @keyframes emote-pop { 0% { opacity: 0; transform: scale(.5); } 20% { opacity: 1; transform: scale(1.2); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-14px); } }

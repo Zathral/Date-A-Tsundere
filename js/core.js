@@ -27,9 +27,10 @@
 
   // ---------- state ----------
   const DEF = () => ({
-    username: 'mennminnmiiii', coins: 50, gems: 50, affection: 0, day: 1, minute: 420, slot: 0, slotTurns: 0,
+    username: 'Sato', coins: 50, gems: 50, affection: 0, day: 1, minute: 420, slot: 0, slotTurns: 0,
     loc: 'bedroom', weather: 'clear', entries: [], memories: [], gifts: [], inventory: {}, pulls: 0, pity: 0,
     eventsDone: [], cgs: [], streak: 0, lastLogin: '', awayDays: 0, greeted: true, giftReady: false,
+    storyFacts: [], sumTurns: 0, talk: null, rel: {},
     eventRun: null, phone: false, intro: false, dailyQ: '', dailyAsked: 0, pendingChoice: null
   });
   const S = G.S = Object.assign(DEF(), jget('tsun.save', {}));
@@ -300,10 +301,12 @@
         <label class="chk"><input type="checkbox" data-chk="subs"><span data-t="m_subs"></span></label></section>
       <section><h3 data-t="m_access"></h3><label class="chk"><input type="checkbox" data-chk="reduceMotion"><span data-t="m_motion"></span></label></section>
       <section><h3 data-t="m_account"></h3><p id="mKey"></p><button class="chip-btn" data-act="key" data-t="m_change_key"></button></section>
-      <section><h3 data-t="m_data"></h3><button class="chip-btn danger" data-act="reset" data-t="m_reset"></button></section></div></div>`;
+      <section><h3 data-t="m_data"></h3><div class="row-btns"><button class="chip-btn" data-act="export" data-t="m_export"></button><button class="chip-btn" data-act="import" data-t="m_import"></button></div><input id="saveFile" type="file" accept=".json,application/json" hidden>
+      <button class="chip-btn danger" data-act="reset" data-t="m_reset"></button></section></div></div>`;
     G.game.appendChild(el);
     el.addEventListener('input', e => { const v = e.target.dataset.vol; if (v) G.setSetting(v, +e.target.value); });
     el.addEventListener('change', e => {
+      if (e.target.id === 'saveFile') return importSave(e.target.files[0]);
       const c = e.target.dataset.chk, s = e.target.dataset.sel;
       if (c) G.setSetting(c, e.target.checked); if (s) G.setSetting(s, e.target.value);
     });
@@ -314,8 +317,23 @@
       if (b.hasAttribute('data-close')) closeMenu();
       if (b.dataset.act === 'key') { G.clearKey(); location.reload(); }
       if (b.dataset.act === 'reset' && confirm(t('m_reset_ask'))) { localStorage.removeItem('tsun.save'); location.href = location.pathname; }
+      if (b.dataset.act === 'export') exportSave();
+      if (b.dataset.act === 'import') $('#saveFile', el).click();
     });
     return el;
+  }
+  function exportSave() {
+    const blob = new Blob([JSON.stringify({ game: 'date-a-tsundere', v: 1, save: S }, null, 1)], { type: 'application/json' });
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `tsundere-day${S.day}.json` });
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  async function importSave(file) {
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text()), sv = data.save;
+      if (data.game !== 'date-a-tsundere' || !sv || typeof sv.affection !== 'number') throw 0;
+      localStorage.setItem('tsun.save', JSON.stringify(sv)); location.reload();
+    } catch { G.toast(t('m_load_bad')); }
   }
   function syncMenu() {
     const el = $('#menuPanel');
