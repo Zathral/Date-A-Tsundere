@@ -146,6 +146,7 @@
   async function act(a) {
     if (G.story.busy()) return G.toast(t('busy'));
     if (a.cost && S.coins < a.cost) { G.sfx('error'); return G.toast(t('no_coins')); }
+    if (a.custom) return a.custom();
     let extra = '';
     if (a.train) {
       const r = await G.train(a.train, a[L()]);
@@ -154,7 +155,7 @@
     }
     const pay = a.pay ? a.pay[0] + Math.floor(Math.random() * (a.pay[1] - a.pay[0] + 1)) : 0;
     S.coins += pay - (a.cost || 0); S.minute = Math.min(1439, S.minute + (a.min || 10));
-    if (pay) { G.toast(t('earned', pay)); G.sfx('chime'); }
+    if (pay) { G.toast(t('earned', pay)); G.sfx('chime'); G.track?.('earn', pay); }
     spend(`${typeof a.prompt === 'function' ? a.prompt() : a.prompt}${extra} (${a.min || 10} minutes pass${pay ? `; the player is paid ${pay} coins` : ''}.)`);
   }
   
@@ -201,7 +202,7 @@ Return ONLY JSON like {"move":"charm"}. Use "none" for ordinary conversation, an
     G.toast(t('moment', t('st_' + a.stat)), 1600);
     const bond = (who === 'yui' ? S.affection / 20 : (S.rel[who] || 0) / 10) * .1 + (who === 'yui' ? ({ happy: .05, annoyed: -.05 }[G.moodId()] || 0) : 0);
     const res = await G.rollAction(a.stat, { base: a.base, bonus: bond, label: a[L()] });
-    G.addXp(a.stat, 1); S.moveCool = 3;
+    G.addXp(a.stat, 1); S.moveCool = 3; G.track?.('move');
     const delta = { great: 2, flustered: 1, corny: -1 }[res.tier], what = a.note.replace('{n}', name);
     G.story.sep(G.chanceLine(res));
     return { forceDelta: delta, note: `${what} OUTCOME (decided by the game, follow it exactly): ${G.tierNote(res.tier)}` };

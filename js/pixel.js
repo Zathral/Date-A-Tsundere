@@ -122,7 +122,7 @@
         tree(20, 138, 1.2); tree(178, 136, 1.1); petals();
       }
     };
-    (scenes[loc] || scenes.bedroom)();
+    (scenes[loc] || (G.SCENES && G.SCENES[loc] ? () => G.SCENES[loc]({ r, disc, glow, sky, cloud, win, steam, petals, tree, f, W, H, p, night }) : scenes.bedroom))();
     if (wx === 'rain' && OUT.includes(loc)) { r(0, 0, W, H, 'rgba(40,60,110,.15)'); rain(0, 0, W, H, 60); }
     const T = { sunset: ['#ff8a5c', .13], dawn: ['#ffb3d1', .12], night: ['#0b1240', .28] }[p];
     if (T) { ctx.globalAlpha = T[1]; r(0, 0, W, H, T[0]); ctx.globalAlpha = 1; }

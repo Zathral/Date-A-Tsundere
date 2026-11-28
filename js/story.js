@@ -107,31 +107,99 @@
     if (e.k === 'p') return addPlayer(e.text);
     if (e.k === 's') return addSep(e.text);
     if (e.k !== 'y') return;
-    log.append(el('div', 'entry yui', `<p class="entry-n">${esc(e.n || '')}</p>${e.s ? `<div class="entry-s"><span class="who">${esc(e.who || 'Yui')}</span><span class="txt">${esc(e.s)}</span></div>` : ''}${e.t && L() === 'ja' && G.settings.subs ? `<p class="entry-t">${esc(e.t)}</p>` : ''}`));
+    const showT = L() === 'ja' && G.settings.subs; let prev = '';
+    (e.segs || []).forEach(s => {
+      if (!s.text) return;
+      const tr = showT && s.t ? `<p class="entry-t">${esc(s.t)}</p>` : '';
+      if (s.k === 'n') log.append(el('div', 'entry yui', `<p class="entry-n">${esc(s.text)}</p>${tr}`));
+      else log.append(el('div', 'entry yui' + (prev === 's' ? ' cont' : ''), `<div class="entry-s live">${prev === 's' ? '' : `<span class="who">${esc(e.who || 'Yui')}</span>`}<span class="txt">${esc(s.text)}</span></div>${tr}`));
+      prev = s.k;
+    });
   }
   const newYuiEntry = () => {
-    const d = el('div', 'entry yui', `<div class="typing" aria-label="${t('thinking')}"><i></i><i></i><i></i></div><p class="entry-n"></p><div class="entry-s"><span class="who">${esc(G.speakerName?.() || 'Yui')}</span><span class="txt"></span></div><p class="entry-t"></p>`);
+    const d = el('div', 'entry yui', `<div class="typing" aria-label="${t('thinking')}"><i></i><i></i><i></i></div>`);
     log.append(d); scrollEnd(); return d;
   };
 
-  // typewriter that follows a streaming transcript (narration -> speech -> translation)
+  // ---------- reply parser: tolerant of wrong closing tags, stray HTML and leaked JSON ----------
+  const TAGS = /<(\/?)(n|s|t|m|p|br)\s*\/?>/gi;
+  const stripTags = s => s.replace(/<\/?[a-z][^>]*>/gi, '').replace(/<\/?[a-z]*$/i, '');
+  function parseScript(txt) {
+    const out = [], all = []; let cur = null, last = 0, meta = null, stray = '', m;
+    const feed = chunk => { if (cur) cur.text += chunk; else stray += chunk; };
+    TAGS.lastIndex = 0;
+    while ((m = TAGS.exec(txt))) {
+      feed(txt.slice(last, m.index)); last = TAGS.lastIndex;
+      const tag = m[2].toLowerCase();
+      if (tag === 'br') { feed('\n'); continue; }
+      if (m[1]) { if (cur) { cur.closed = true; cur = null; } continue; } // any closing tag (even a wrong one like </p>) ends the open block
+      if (tag === 'p') continue;
+      if (cur) cur.closed = true;
+      all.push(cur = { k: tag, text: '', closed: false });
+    }
+    feed(txt.slice(last));
+    all.forEach(s => {
+      if (s.k === 'm') { meta = { text: s.text.replace(/^\s+/, ''), closed: s.closed }; return; }
+      const j = s.text.search(/\{\s*"(?:emotion|affection_delta|replies)"/); // JSON that leaked outside <m>
+      if (j >= 0) { meta ||= { text: s.text.slice(j), closed: s.closed }; s.text = s.text.slice(0, j); }
+      s.text = stripTags(s.text).replace(/^\s+/, ''); if (s.closed) s.text = s.text.trimEnd();
+      if (s.k === 't') { const p = out[out.length - 1]; if (p) { p.t = s.text; p.tClosed = s.closed; } }
+      else out.push({ k: s.k, text: s.text, t: '', tClosed: false, closed: s.closed });
+    });
+    if (!meta) { const j = stray.search(/\{\s*"(?:emotion|affection_delta|replies)"/); if (j >= 0) meta = { text: stray.slice(j), closed: false }; }
+    const segs = out.filter(s => s.text);
+    if (!segs.length && !meta && txt.trim() && !/^\s*<\/?[a-z]*$/i.test(txt)) { const x = stripTags(txt).trim(); if (x) segs.push({ k: 's', text: x, t: '', tClosed: false, closed: false }); }
+    return { segs: segs.slice(0, 6), m: meta || { text: '', closed: false } };
+  }
+  const parseMeta = m => { const s = String((m && m.text) || '').replace(/```json|```/g, ''); for (const x of [s, (s.match(/\{[\s\S]*\}/) || [''])[0]]) { try { return JSON.parse(x); } catch { /* try next */ } } return {}; };
+  G.parseScript = parseScript;
+  // what the model sees as history: always clean, never its own raw (possibly malformed) output
+  const canon = e => {
+    const segs = e.segs || [{ k: 'n', text: e.n || '' }, { k: 's', text: e.s || '' }];
+    return segs.filter(s => s.text).map(s => `<${s.k}>${s.text}</${s.k}>${s.t ? `<t>${s.t}</t>` : ''}`).join('') + `<m>{"emotion":"${e.em || 'neutral'}","affection_delta":0,"memory":"","emote":"","opening":"","replies":[]}</m>`;
+  };
+  const flat = e => (e.segs || []).map(s => (s.k === 's' ? `"${s.text}"` : s.text)).join(' ');
+  // heal old saves: re-parse the stored raw text once
+  const healEntry = e => {
+    if (e.k !== 'y' || e.segs) return;
+    const p = parseScript(e.raw || `<n>${e.n || ''}</n><s>${e.s || ''}</s>`);
+    e.segs = p.segs.map(({ k, text, t }) => ({ k, text, t })); delete e.raw; delete e.n; delete e.s; delete e.t;
+  };
+  S.entries.forEach(healEntry);
+
+  // ---------- typewriter: each speech bubble is its own log entry, with a "typing..." pause between them ----------
   function typewriter(root) {
-    const T = { n: { el: $('.entry-n', root) }, s: { el: $('.txt', root) }, t: { el: $('.entry-t', root) } }, order = ['n', 's', 't'];
-    order.forEach(k => Object.assign(T[k], { target: '', pos: 0, closed: false }));
-    let acc = 0, last = performance.now(), ended = false, skip = false, resolve; const done = new Promise(r => { resolve = r; });
-    root.addEventListener('click', () => { skip = true; });
+    const R = [], made = [], who = esc(G.speakerName?.() || 'Yui');
+    const dots = '<div class="typing" aria-hidden="true"><i></i><i></i><i></i></div>';
+    let acc = 0, last = performance.now(), ended = false, skip = false, dead = false, resolve; const done = new Promise(r => { resolve = r; });
+    const bind = e => e.addEventListener('click', () => { skip = true; });
+    bind(root);
+    const build = (s, i) => {
+      s.e = i ? el('div', 'entry yui cont', dots) : root;
+      if (i) { log.append(s.e); made.push(s.e); bind(s.e); G.sfx('pop'); scrollEnd(); }
+      const prevS = i && R[i - 1].k === 's';
+      s.main = el(s.k === 'n' ? 'p' : 'div', s.k === 'n' ? 'entry-n' : 'entry-s live', s.k === 'n' ? '' : `${prevS ? '' : `<span class="who">${who}</span>`}<span class="txt"></span>`);
+      s.tEl = el('p', 'entry-t', '');
+      s.e.append(s.main, s.tEl);
+      s.f[0].el = s.k === 'n' ? s.main : s.main.querySelector('.txt'); s.f[1].el = s.tEl; s.built = true;
+    };
     const loop = now => {
+      if (dead) return;
       const dt = Math.min(.1, (now - last) / 1000); last = now;
       const fast = skip || G.cps() === Infinity; let budget;
       if (fast) budget = Infinity; else { acc += dt * G.cps(); budget = Math.floor(acc); acc -= budget; }
       let finished = true;
-      for (const k of order) {
-        const x = T[k];
-        if (x.pos < x.target.length) {
-          const step = Math.min(x.target.length - x.pos, budget); x.pos += step; budget -= step;
-          x.el.textContent = x.target.slice(0, x.pos); root.classList.add('has-' + k, 'started');
+      outer: for (let i = 0; i < R.length; i++) {
+        const s = R[i];
+        if (!s.built) {
+          if (i > 0 && !fast) s.readyAt = now + Math.min(1100, 350 + R[i - 1].f[0].target.length * 14); // pause between bubbles
+          build(s, i);
         }
-        if (x.pos < x.target.length || !(x.closed || ended)) { finished = false; break; }
+        if (!fast && s.readyAt && now < s.readyAt) { finished = false; break; }
+        for (const f of s.f) {
+          if (f.pos < f.target.length) { const step = Math.min(f.target.length - f.pos, budget); f.pos += step; budget -= step; f.el.textContent = f.target.slice(0, f.pos); s.e.classList.add('started'); }
+          if (f.pos < f.target.length || !(f.closed || ended)) { finished = false; break outer; }
+        }
       }
       scrollEnd();
       if (finished && ended) return resolve();
@@ -139,25 +207,19 @@
     };
     requestAnimationFrame(loop);
     return {
-      feed(p) { order.forEach(k => { const show = k !== 't' || (L() === 'ja' && G.settings.subs); T[k].target = show ? p[k].text : ''; T[k].closed = p[k].closed; }); },
-      end() { ended = true; root.classList.add('started'); }, done
+      feed(p) {
+        const showT = L() === 'ja' && G.settings.subs;
+        p.segs.forEach((g, i) => {
+          const s = R[i] ||= { k: g.k, f: [{ target: '', pos: 0, closed: false }, { target: '', pos: 0, closed: false }] };
+          s.f[0].target = g.text; s.f[0].closed = g.closed;
+          s.f[1].target = showT ? g.t : ''; s.f[1].closed = g.tClosed || i < p.segs.length - 1;
+        });
+      },
+      end() { ended = true; root.classList.add('started'); },
+      destroy() { dead = true; made.forEach(e => e.remove()); resolve(); },
+      done
     };
   }
-
-  // ---------- tagged reply parser (works on partial streams) ----------
-  function parseTagged(txt) {
-    const get = tag => {
-      const i = txt.indexOf(`<${tag}>`); if (i < 0) return { text: '', closed: false };
-      const s = i + tag.length + 2, j = txt.indexOf(`</${tag}>`, s), raw = j < 0 ? txt.slice(s) : txt.slice(s, j);
-      let text = raw.replace(/<[^>]*$/, '').replace(/^\s+/, ''); if (j >= 0) text = text.replace(/\s+$/, '');
-      return { text, closed: j >= 0 };
-    };
-    const out = { n: get('n'), s: get('s'), t: get('t'), m: get('m') };
-    if (!txt.includes('<n>') && !txt.includes('<s>') && txt.trim() && !/^\s*<[a-z]*$/.test(txt)) out.s = { text: txt.trim(), closed: false };
-    return out;
-  }
-  const parseMeta = m => { try { return JSON.parse(m.text.replace(/```json|```/g, '')); } catch { return {}; } };
-  G._parseTagged = parseTagged;
 
   // ---------- Gemini streaming with model fallback ----------
   async function streamGemini(system, contents, onText) {
@@ -167,7 +229,7 @@
       try {
         const r = await fetch(`${G.API}/models/${model}:streamGenerateContent?alt=sse`, {
           method: 'POST', signal: ctrl.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-          body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents, generationConfig: { temperature: 1, maxOutputTokens: 1000 } })
+          body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents, generationConfig: { temperature: 1, maxOutputTokens: 1400 } })
         });
         if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { status: r.status, detail: (await r.text()).slice(0, 300) });
         const reader = r.body.getReader(), dec = new TextDecoder(); let buf = '';
@@ -199,8 +261,8 @@
   function buildSystem(c) {
     const lang = L(), si = G.stageIdx(S.affection), sl = slot(), ev = c.ev, loc = G.STR.en['loc_' + (S.phone ? 'yui_room' : S.loc)];
     const langRule = lang === 'ja'
-      ? 'Write the narration and Yui\'s speech in natural Japanese (casual tsundere speech: べ、別に…, ばか, 〜なんだから). Put a short natural English translation of narration+speech in <t>.'
-      : 'Write in English, with the occasional Japanese interjection from Yui (e.g. べ、別に, ばか). Leave <t> empty.';
+      ? 'Write the narration and Yui\'s speech in natural Japanese (casual tsundere speech: べ、別に…, ばか, 〜なんだから). Translations go in <t> tags (see TRANSLATION below).'
+      : 'Write in English, with the occasional Japanese interjection from Yui (e.g. べ、別に, ばか).';
     return `You are the narrator and Yui in an immersive, wholesome high-school slice-of-life dating sim. Yui is a 17-year-old Japanese classmate and a classic tsundere: proud, brash, easily flustered, quick to deny her feelings ("I-it's not like...", "b-baka"), but secretly curious about the player and caring. The player is a classmate${S.username ? ` called "${S.username}"` : ''}. Make it feel like a story, not a chatbot.
 
 SCENE NOW: day ${S.day}, ${G.clock()} (${G.period(Math.floor(S.minute / 60))}), weather: ${S.weather}, location: ${loc}. Phase of day: ${sl.id}. ${sl.note}
@@ -227,11 +289,15 @@ INPUT: lines from the player in *asterisks* are actions; other text is speech. L
 
 LANGUAGE: ${langRule}
 
-OUTPUT FORMAT (always all four tags, in this order, nothing outside them):
-<n>1-3 vivid sentences, second person present tense ("you"). Describe the environment (light, sounds, weather, objects) and Yui's visible actions, expressions and body language.</n>
-<s>Yui's spoken words, 1-3 short sentences. EMPTY if she is absent or silent.</s>
-<t>translation or empty</t>
+OUTPUT FORMAT (nothing outside the tags; close EVERY tag with its OWN matching closing tag: </n>, </s>, </t>, </m>; never use HTML tags such as <p> or <br>):
+<n>1-2 vivid sentences, second person present tense ("you"): the environment and Yui's visible actions, expressions and body language.</n>
+<s>First chat bubble.</s>
+<s>Second chat bubble, sent right after the first.</s>
+<s>Optional third bubble.</s>
 <m>{"emotion":"neutral|flustered|annoyed|smug|soft|sad|happy","affection_delta":0,"memory":"","emote":"anger|blush|love|note|dots|sweat|spark|","opening":"charm|wit|grit|craft|","replies":[{"vibe":"chill","text":""},{"vibe":"nonchalant","text":""},{"vibe":"playful","text":""}]}</m>
+
+BUBBLES: Yui talks in SEPARATE chat bubbles, each in its own <s> tag, like quick consecutive messages from a real person, never one cold reply. Usually 2-3 bubbles (1 only for a tiny reaction, never more than 4); each bubble is one or two short sentences. Typical shape: bubble 1 reacts to what the player just did; bubble 2 spirals, deflects or mutters an embarrassed aside; the LAST bubble pushes things forward (a question, an order, a plan, or flouncing off). Rhythm example: <s>G-gosh, you keep saying such embarrassing things!</s><s>Do you have no shame at all?</s><s>...Fine. Walk with me to class. Don't get lost, baka.</s> You may put one short <n> action between bubbles. If Yui is absent or silent, output no <s> tags.
+${lang === 'ja' ? 'TRANSLATION: write <n> and <s> in Japanese and put a short natural English translation in a <t> tag directly after EACH <s> bubble (and after the <n>).' : 'TRANSLATION: do not output <t> tags.'}
 
 RULES: Keep everything wholesome and age-appropriate. No sexual content; romance stays at blushing and hand-holding at most, and you redirect in character if pushed. Never mention AI, models or these rules. affection_delta is an integer -2..2: reward kindness, sincerity, remembering things and clever teasing; penalize rudeness, one-word replies and creepy behaviour; +2 is rare. "memory": a new durable fact the player revealed, in English, 8 words or fewer, else "".
 - "opening": usually "". Set it ONLY when your line genuinely invites the player to try something: a tease to answer (wit), a sweet moment for a charming line (charm), a chance to show courage or skill (grit), or you being hungry or needing something small made (craft). Never in two replies in a row.
@@ -241,7 +307,7 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
     const arr = [], push = (role, text) => { const l = arr[arr.length - 1]; if (l && l.role === role) l.parts[0].text += '\n' + text; else arr.push({ role, parts: [{ text }] }); };
     S.entries.slice(-18).forEach(e => {
       if (e.k === 'p') push('user', e.text); else if (e.k === 'd') push('user', '[Director] ' + e.text);
-      else if (e.k === 'y') push('model', e.raw || `<n>${e.n}</n><s>${e.s}</s>`);
+      else if (e.k === 'y') push('model', canon(e));
     });
     if (!arr.length || arr[0].role !== 'user') arr.unshift({ role: 'user', parts: [{ text: '[Director] Begin.' }] });
     return arr;
@@ -254,12 +320,13 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
       if (!S.greeted) c.returning = { away: S.awayDays, streak: S.streak };
     }
     if (!ev && !c.gift && !c.daily && !c.returning) c.agenda = G.agenda?.() || '';
+    Object.assign(c, G.ctxExtra?.(c) || {}); // outfit reactions etc. (systems.js)
     return c;
   }
 
   async function summarize() {
     if (!G.getKey()) return;
-    const scenes = S.entries.slice(-24).map(e => e.k === 'p' ? `Player: ${e.text}` : e.k === 'y' ? `${e.who || 'Yui'}: ${e.n} "${e.s}"` : e.k === 'd' ? `[Director] ${e.text}` : '').filter(Boolean).join('\n');
+    const scenes = S.entries.slice(-24).map(e => e.k === 'p' ? `Player: ${e.text}` : e.k === 'y' ? `${e.who || 'Yui'}: ${flat(e)}` : e.k === 'd' ? `[Director] ${e.text}` : '').filter(Boolean).join('\n');
     const prompt = `You maintain the long-term memory of a slice-of-life dating sim.\nCurrent facts:\n${S.storyFacts.map(f => '- ' + f).join('\n') || '(none)'}\n\nRecent scenes:\n${scenes}\n\nReturn ONLY a JSON array of strings: the updated fact list. Keep still-important old facts, merge duplicates, and add 3-5 new facts from the recent scenes (promises, secrets, plot beats, relationships, things the player did or said). Max 12 facts, each under 20 words, in English.`;
     for (const model of [...G.MODELS].reverse()) { // fallback model first, to spare the main one
       try {
@@ -279,11 +346,15 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
   async function yuiTurn(c) {
     const d = newYuiEntry(), tw = typewriter(d); let parsed;
     try {
-      const res = await streamGemini(buildSystem(c), toContents(), txt => { parsed = parseTagged(txt); tw.feed(parsed); });
-      parsed = parseTagged(res.text); tw.feed(parsed); tw.end(); await tw.done;
+      const res = await streamGemini(buildSystem(c), toContents(), txt => { parsed = parseScript(txt); tw.feed(parsed); });
+      parsed = parseScript(res.text);
+      if (!parsed.segs.length) throw new Error('Unparseable reply');
+      tw.feed(parsed); tw.end(); await tw.done;
       const m = parseMeta(parsed.m), em = ['neutral', 'flustered', 'annoyed', 'smug', 'soft', 'sad', 'happy'].includes(m.emotion) ? m.emotion : 'neutral';
+      const speech = parsed.segs.filter(s => s.k === 's');
       let delta = clamp(Math.round(Number(m.affection_delta) || 0), -2, 2); if (S.affection <= 3) delta = Math.min(delta, 1);
       if (c.gift) delta = Math.max(delta, 1);
+      if (c.minDelta) delta = Math.max(delta, c.minDelta);
       let fit = false;
       if (c.vibe) { G.addXp(c.vibe, 2); if (!S.talk && FIT[G.moodId()] === c.vibe) { delta = Math.max(delta, 1); fit = true; } }
       if (c.forceDelta != null) delta = c.forceDelta;
@@ -292,11 +363,11 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
       if (m.memory && !S.memories.includes(m.memory)) S.memories = [String(m.memory).slice(0, 80), ...S.memories].slice(0, 10);
       if (c.daily) S.dailyAsked = S.day; if (c.returning) S.greeted = true;
       const reps = (Array.isArray(m.replies) ? m.replies : []).filter(r => r && VIBES.includes(r.vibe) && String(r.text || '').trim()).slice(0, 3).map(r => ({ vibe: r.vibe, text: String(r.text).trim().slice(0, 80) }));
-      S.quick = parsed.s.text ? reps : [];
+      S.quick = speech.length ? reps : [];
       S.opening = ['charm', 'wit', 'grit', 'craft'].includes(m.opening) && S.moveCool <= 0 ? m.opening : '';
-      S.entries.push({ k: 'y', n: parsed.n.text, s: parsed.s.text, t: parsed.t.text, raw: res.text.slice(0, 1200), who: G.speakerName?.() || 'Yui', em });
+      S.entries.push({ k: 'y', segs: parsed.segs.map(({ k, text, t }) => ({ k, text, t })), who: G.speakerName?.() || 'Yui', em });
       if (fit) sep(t('vibe_fit'));
-      lastSpeech = parsed.s.text || lastSpeech;
+      lastSpeech = speech.length ? speech[speech.length - 1].text : lastSpeech;
       setEmotion(em, m.emote); G.voice(em);
       if (delta > 0) { G.sfx('chime'); G.toast(t('aff_up', delta)); const r = $('#scene', page).getBoundingClientRect(); G.burst(r.left + r.width * .6, r.top + r.height * .35, 4 + delta * 2); }
       else if (delta < 0) G.toast(t('aff_down', delta));
@@ -307,7 +378,7 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
       if (++S.sumTurns >= 10) { S.sumTurns = 0; summarize(); }
       G.save(); updateScene(); return true;
     } catch (e) {
-      d.remove(); G.sfx('error'); console.warn('yuiTurn failed', e);
+      tw.destroy(); d.remove(); G.sfx('error'); console.warn('yuiTurn failed', e);
       const bad = e.status === 401 || e.status === 403 || /API key|API_KEY/i.test(e.detail || '');
       if (bad) { G.clearKey(); G.showGate('invalid'); }
       const box2 = el('div', 'entry err', `${esc(t('err'))} <button class="chip-btn" type="button">${t('retry')}</button>`); log.append(box2); scrollEnd();
@@ -402,9 +473,9 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
       label: name(o) + (o.stat ? ` [${t('st_' + o.stat)}]` : '') + (o.xp ? ` ✦${Object.keys(o.xp).map(k => t('st_' + k)).join('/')}` : ''),
       locked: o.req && G.level(o.req.stat) < o.req.lv ? `${t('st_' + o.req.stat)} Lv.${o.req.lv}` : '',
       pick: async () => {
-        const er = S.eventRun; let d = o.delta ?? 0, note = o.note || `The player chose: ${o.en}.`;
+        const er = S.eventRun; let d = o.delta ?? 0, res, note = o.note || `The player chose: ${o.en}.`;
         if (o.stat) {
-          const res = await G.rollAction(o.stat, { base: o.base ?? .2, bonus: o.bonus || 0, label: name(o) }); G.addXp(o.stat, 1);
+          res = await G.rollAction(o.stat, { base: o.base ?? .2, bonus: o.bonus || 0, label: name(o) }); G.addXp(o.stat, 1);
           d = res.tier === 'great' ? d + 1 : res.tier === 'corny' ? Math.min(0, d - 1) : d;
           note += ` OUTCOME (decided by the game, follow it): ${G.tierNote(res.tier)}`; sep(G.chanceLine(res));
         }
@@ -416,6 +487,7 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
         if (o.fact) G.addFact(o.fact);
         if (o.gift) G.takeGift?.();
         if (o.quest) { const was = (S.quests[o.quest[0]] || { stage: -1 }).stage; S.quests[o.quest[0]] = { stage: o.quest[1], day: S.day }; G.toast(t(was < 0 ? 'quest_new' : 'quest_up', G.QUESTS[o.quest[0]].title[L()]), 2600); }
+        if (o.fx) o.fx(res);
         er.cdone.push(ci); er.open = null;
         if (o.end) er.k = Math.max(er.k, ev.beats.length + 1);
         G.affect(d); send(`*${name(o)}*`, { note });

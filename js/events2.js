@@ -47,9 +47,9 @@
   const HOW = { walk: 'quietly slipped out', excused: 'faked a stomachache and was excused', nurse: 'faked a stomachache but the nurse saw through it', caught: 'got caught sneaking out' };
 
   G.addFact = f => { S.storyFacts = [f, ...(S.storyFacts || []).filter(x => x !== f)].slice(0, 12); G.save(); };
-  G.hasGift = () => G.ITEMS.some(i => i.r !== 'N' && S.inventory[i.id] > 0);
+  G.hasGift = () => G.ITEMS.some(i => i.r !== 'N' && !i.keep && S.inventory[i.id] > 0);
   G.takeGift = () => {
-    const it = G.ITEMS.filter(i => i.r !== 'N' && S.inventory[i.id] > 0).sort((a, b) => ['R', 'SR', 'SSR'].indexOf(a.r) - ['R', 'SR', 'SSR'].indexOf(b.r))[0];
+    const it = G.ITEMS.filter(i => i.r !== 'N' && !i.keep && S.inventory[i.id] > 0).sort((a, b) => ['R', 'SR', 'SSR'].indexOf(a.r) - ['R', 'SR', 'SSR'].indexOf(b.r))[0];
     if (it) { S.inventory[it.id]--; S.flags.bday_gift = it.en; }
     return it;
   };

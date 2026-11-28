@@ -279,3 +279,8 @@ html[data-motion="reduced"] *, html[data-motion="reduced"] *::before, html[data-
 #hudQuest { max-width: 100%; white-space: normal; border-color: var(--pink); }
 #hudQuest[hidden] { display: none; }
 #skipBtn { border-color: #e0457b; color: #e0457b; }
+
+/* ---------- multi-bubble replies ---------- */
+.entry-s.live { display: block; }
+.entry-s.live:not(:has(.who)) { margin-top: 0; }
+.entry.yui.cont { margin-top: -6px; }
