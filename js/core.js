@@ -19,7 +19,7 @@
   if (params.has('reset')) localStorage.removeItem('tsun.save');
 
   // ---------- settings ----------
-  const DEFAULTS = { lang: 'en', master: 80, music: 40, sfx: 70, voice: 90, mute: false, speed: 'normal', subs: true,
+  const DEFAULTS = { lang: 'en', master: 80, music: 40, sfx: 70, voice: 90, mute: false, speed: 'fast', subs: true,
     reduceMotion: matchMedia('(prefers-reduced-motion: reduce)').matches };
   G.settings = { ...DEFAULTS, ...jget('tsun.settings', {}) };
   G.cps = () => params.has('selftest') ? Infinity : ({ slow: 22, normal: 48, fast: 100, instant: Infinity })[G.settings.speed] ?? 48;

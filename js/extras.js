@@ -145,7 +145,7 @@
     jp.innerHTML = `<div class="sheet"><h2>${G.t('j_title')}</h2><p>${G.t('day')} ${S.day} · ${G.t('stage')[si]} · ♡ ${S.affection}/20 · ${G.t('streak', S.streak)}</p>
       <div class="cols"><div><h3>${G.t('j_events')}</h3><ul class="evs">${evs}</ul><h3>${G.t('j_cgs')}</h3><div class="row-btns">${cgs}</div></div>
       <div><h3>${G.t('j_stats')}</h3><ul class="stats">${G.STATS.map(s => `<li>${G.t('st_' + s)} <b>Lv.${G.level(s)}</b><span class="bar"><i style="width:${G.level(s) * 10}%"></i></span></li>`).join('')}</ul>
-      <h3>${G.t('j_mem')}</h3>${list(S.memories)}<h3>${G.t('j_story')}</h3>${list(S.storyFacts)}<h3>${G.t('j_gifts')}</h3>${list(S.gifts.slice(-8))}</div></div></div>`;
+      ${G.questHtml ? G.questHtml() : ''}<h3>${G.t('j_mem')}</h3>${list(S.memories)}<h3>${G.t('j_story')}</h3>${list(S.storyFacts)}<h3>${G.t('j_gifts')}</h3>${list(S.gifts.slice(-8))}</div></div></div>`;
   };
   jp.addEventListener('click', e => { const b = e.target.closest('[data-cg]'); if (b) G.showCG(+b.dataset.cg, true); });
   G.pages.journal = { show: on => { jp.classList.toggle('show', on); if (on) renderJournal(); } };

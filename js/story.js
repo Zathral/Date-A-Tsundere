@@ -1,4 +1,4 @@
-// js/story.js: immersive story page, day cycle, event beats, gifts, streaming Gemini roleplay
+// js/story.js: immersive story page, day cycle, events, quick replies, skipping class, streaming Gemini roleplay
 (() => {
   const { $, $$, clamp, S } = G, t = (...a) => G.t(...a), L = () => G.settings.lang;
   const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -8,6 +8,7 @@
   const OUTDOOR = ['street', 'school_gate', 'park', 'rooftop'], WX = { clear: '☀️', cloudy: '☁️', rain: '🌧️' };
   const DAILY_Q = ['What did you eat for breakfast?', 'What is your favourite food?', 'What do you do when you cannot sleep?', 'Which subject do you secretly like?',
     'What is something you are bad at?', 'If you had a free weekend, where would you go?', 'What music do you listen to?', 'What is your favourite season?'];
+  const VIBES = G.VIBES, FIT = G.VIBE_FIT;
 
   // ---------- day cycle ----------
   const SLOTS = [
@@ -18,10 +19,12 @@
     { id: 'pm', start: 795, end: 945, turns: 4, loc: 'classroom', yui: true, note: 'Afternoon classes. Sleepy warm atmosphere.' },
     { id: 'after', start: 945, end: 1110, turns: 5, loc: null, choose: 'after', yui: true, note: 'After school.' },
     { id: 'evening', start: 1110, end: 1320, turns: 3, loc: 'home', yui: false, note: 'Evening at home. Yui is NOT here. Dinner, homework, the quiet house.' },
-    { id: 'night', start: 1320, end: 1380, turns: 99, loc: 'bedroom', choose: 'night', yui: false, note: 'Late night in the bedroom. Yui is NOT here unless the player texts her.' }
+    { id: 'night', start: 1320, end: 1380, turns: 99, loc: 'bedroom', choose: 'night', yui: false, note: 'Late night in the bedroom. Yui is NOT here unless the player texts her.' },
+    // dynamic slot used when the player skips class (start time is S.skipStart)
+    { id: 'skip', start: 0, end: 945, turns: 3, loc: null, choose: 'map', yui: false, next: 5, note: 'The player is skipping school and is free to wander town. Yui is NOT here; she is still at school.' }
   ];
   const CHOICES = {
-    lunch: [{ loc: 'cafeteria', k: 'lunch_cafeteria' }, { loc: 'rooftop', k: 'lunch_rooftop', minAff: 6 }, { loc: 'classroom', k: 'lunch_classroom' }],
+    lunch: [{ loc: 'cafeteria', k: 'lunch_cafeteria' }, { loc: 'rooftop', k: 'lunch_rooftop', minAff: 6 }, { loc: 'classroom', k: 'lunch_classroom' }, { act: 'skip', k: 'lunch_skip' }],
     after: [{ loc: 'park', k: 'after_park' }, { loc: 'library', k: 'after_library' }, { act: 'map', k: 'after_map' }, { skip: true, k: 'after_home' }],
     map: [{ act: 'map', k: 'after_map' }, { skip: true, k: 'stay_home' }],
     night: [{ act: 'text', k: 'night_text' }, { act: 'sleep', k: 'night_sleep' }]
@@ -34,29 +37,32 @@
     'You are deeply fond of the player but still tsundere. Vulnerable moments happen, then you retreat into denial.'];
   const MOOD_BRIEF = { tired: 'Sleepy and grumpy: short sentences, yawns, low patience.', annoyed: 'Prickly and snappy, but secretly still listening.', happy: 'Secretly in a good mood; softer than usual and she hates that it shows.' };
 
-  const PACE = 2; // 1 = old speed, 2 = twice as many turns per part of the day
+  const PACE = 0.5; // 1 = slow (old default was 2 = even slower). Lower = faster days (fewer turns per part of the day)
   const WE = [
     { id: 'wwake', start: 480, end: 540, turns: 3, loc: 'bedroom', yui: false, note: 'Weekend morning, no school. The player wakes up late at home. Yui is NOT here. Narrate the lazy morning and the free day ahead.' },
     { id: 'wam', start: 540, end: 780, turns: 6, loc: null, choose: 'map', yui: true, note: 'A free weekend morning in town.' },
     { id: 'wpm', start: 780, end: 1080, turns: 6, loc: null, choose: 'map', yui: true, note: 'A free weekend afternoon in town.' }];
-  [...SLOTS, ...WE].forEach(s => { if (s.turns < 99) s.turns *= PACE; });
+  [...SLOTS, ...WE].forEach(s => { if (s.turns < 99) s.turns = Math.max(2, Math.round(s.turns * PACE)); });
   const WE_SLOTS = [...WE, SLOTS[6], SLOTS[7]];
   const DOW = { en: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], ja: ['月', '火', '水', '木', '金', '土', '日'] };
   G.weekend = () => (S.day - 1) % 7 >= 5;
   G.dow = () => DOW[L()][(S.day - 1) % 7];
   const slot = () => (G.weekend() ? WE_SLOTS : SLOTS)[S.slot];
   const present = () => !!S.eventRun || S.phone || !!S.talk || (slot().yui && (G.yuiHere ? G.yuiHere() : true));
-  const activeEvent = () => S.eventRun && [...G.EVENTS, ...(G.NPC_EVENTS || [])].find(e => e.id === S.eventRun.id);
-  let busy = false, rendered = false, lastSpeech = '';
+  const activeEvent = () => S.eventRun && G.allEvents().find(e => e.id === S.eventRun.id);
+  const evChoices = ev => ev.choices || (ev.choice ? [ev.choice] : []);
+  const setupOf = ev => (typeof ev.setup === 'function' ? ev.setup() : ev.setup);
+  const canSkip = () => !G.weekend() && ['commute', 'am', 'lunch', 'pm'].includes(slot().id) && !S.eventRun;
+  let busy = false, rendered = false, lastSpeech = '', idleT, nudges = 0;
 
   // ---------- DOM ----------
   const page = el('section', 'page story', `
     <div class="scene" id="scene"><div class="env" id="env"></div><img class="yui" id="yui" alt="Yui" src="assets/main-character.png"><div class="emote" id="emote" aria-hidden="true"></div>
-      <div class="scene-hud"><span class="chip" id="hudLoc"></span><span class="chip" id="hudTime"></span><span class="chip" id="hudWx"></span></div></div>
+      <div class="scene-hud"><span class="chip" id="hudLoc"></span><span class="chip" id="hudTime"></span><span class="chip" id="hudWx"></span><span class="chip" id="hudQuest" hidden></span></div></div>
     <div class="panel"><div class="panel-head"><div><h2 class="chat-title" data-t="chat_title"></h2><div class="sub" id="hudStage"></div></div>
       <div class="head-btns"><button class="chip-btn" data-route="/home" data-t="home_btn"></button><button class="chip-btn" data-route="/menu" data-t="menu_btn"></button></div></div>
       <div class="log" id="log" role="log" aria-live="polite"></div><div class="choices" id="choices" hidden></div>
-      <div class="toolbar"><button class="chip-btn" id="giftBtn" type="button"></button><button class="chip-btn" id="moveBtn" type="button"></button></div>
+      <div class="toolbar"><button class="chip-btn" id="giftBtn" type="button"></button><button class="chip-btn" id="moveBtn" type="button"></button><button class="chip-btn" id="skipBtn" type="button"></button></div>
       <div class="gift-pop" id="giftPop" hidden></div>
       <form class="composer" id="composer"><input id="said" maxlength="300" autocomplete="off" aria-label="Message"><button type="submit" class="send" id="sendBtn"></button></form></div>`);
   page.id = 'storyPage'; G.game.appendChild(page);
@@ -66,16 +72,22 @@
     said.placeholder = t('placeholder'); $('#sendBtn', page).textContent = t('send'); $('#giftBtn', page).textContent = '🎁 ' + t('gift');
     const nx = slot().id === 'night' ? (S.phone ? t('night_sleep') : '') : t('next_' + slot().id); const mb = $('#moveBtn', page);
     mb.textContent = nx ? '⏩ ' + nx : ''; mb.hidden = !nx;
+    const sk = $('#skipBtn', page); sk.textContent = '🚪 ' + t('skip_btn'); sk.hidden = !canSkip();
     $('#hudStage', page).textContent = `${t('stage')[G.stageIdx(S.affection)]} · ♡ ${S.affection}/20 · ${t('slot_' + slot().id)}`;
   };
-  const setBusy = b => { busy = b; said.disabled = b; $('#sendBtn', page).disabled = b; $('#moveBtn', page).disabled = b || !!S.pendingChoice || !!S.eventRun; $('#giftBtn', page).disabled = b; };
-  
+  const setBusy = b => {
+    busy = b; said.disabled = b; $('#sendBtn', page).disabled = b;
+    $('#moveBtn', page).disabled = b || !!S.pendingChoice || !!S.eventRun; $('#skipBtn', page).disabled = b || !!S.pendingChoice || !!S.eventRun;
+    $('#giftBtn', page).disabled = b;
+  };
+
   let px;
   function updateScene() {
     const hour = Math.floor(S.minute / 60), sc = $('#scene', page), loc = S.phone ? 'yui_room' : S.loc;
     (px ||= G.pixelMount($('#env', page))).set(loc, hour, S.weather);
     sc.dataset.wx = S.weather; sc.dataset.out = OUTDOOR.includes(S.loc) && !S.phone ? 1 : 0;
     $('#hudLoc', page).textContent = t('loc_' + loc); $('#hudTime', page).textContent = `${t('day')} ${S.day} (${G.dow()}) · ${G.clock()}`; $('#hudWx', page).textContent = WX[S.weather] || '';
+    const q = G.questHint?.() || '', qe = $('#hudQuest', page); qe.textContent = q ? '📜 ' + q : ''; qe.hidden = !q;
     $('#yui', page).classList.toggle('away', !present());
     labelUi(); G.renderState();
     G.emit('scene');
@@ -90,6 +102,7 @@
   const scrollEnd = () => { log.scrollTop = log.scrollHeight; };
   function addPlayer(text) { log.append(el('div', 'entry player', esc(text))); scrollEnd(); }
   function addSep(text) { log.append(el('div', 'entry sep', esc(text))); scrollEnd(); }
+  const sep = text => { S.entries.push({ k: 's', text }); addSep(text); };
   function addStatic(e) {
     if (e.k === 'p') return addPlayer(e.text);
     if (e.k === 's') return addSep(e.text);
@@ -154,7 +167,7 @@
       try {
         const r = await fetch(`${G.API}/models/${model}:streamGenerateContent?alt=sse`, {
           method: 'POST', signal: ctrl.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-          body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents, generationConfig: { temperature: 1, maxOutputTokens: 800 } })
+          body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents, generationConfig: { temperature: 1, maxOutputTokens: 1000 } })
         });
         if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { status: r.status, detail: (await r.text()).slice(0, 300) });
         const reader = r.body.getReader(), dec = new TextDecoder(); let buf = '';
@@ -182,7 +195,6 @@
     throw err || new Error('All models failed');
   }
 
-
   // ---------- prompt ----------
   function buildSystem(c) {
     const lang = L(), si = G.stageIdx(S.affection), sl = slot(), ev = c.ev, loc = G.STR.en['loc_' + (S.phone ? 'yui_room' : S.loc)];
@@ -196,7 +208,7 @@ ${S.phone ? 'The player is TEXTING Yui from home late at night. Yui is in her ow
 YUI PRESENT: ${present() ? 'yes' : 'NO. She is not here: leave <s> empty and narrate only the environment, the time passing and the player\'s surroundings.'}
 RELATIONSHIP: ${G.tl('en', 'stage')[si]} (affection ${S.affection}/20). ${STAGE_BRIEF[si]}
 MOOD: ${MOOD_BRIEF[G.moodId()]} Time-of-day matters: grumpy and half-asleep in the morning, softer and more guarded-down late at night.
-${ev ? `SPECIAL EVENT: "${ev.title.en}". ${ev.setup}` : ''}${c.beat ? `\nSTORY BEAT FOR THIS REPLY (make it happen naturally): ${c.beat}` : ''}${c.note ? `\nPLAYER CHOICE JUST MADE: ${c.note}` : ''}
+${ev ? `SPECIAL EVENT: "${ev.title.en}". ${setupOf(ev)}` : ''}${c.beat ? `\nSTORY BEAT FOR THIS REPLY (make it happen naturally): ${c.beat}` : ''}${c.note ? `\nPLAYER CHOICE JUST MADE: ${c.note}` : ''}
 TIME PASSES: about ${c.minutes || 0} minutes passed since your last reply; mention it only if natural.
 ${c.gift ? `PLAYER JUST GAVE ${(G.speakerName?.() || 'Yui').toUpperCase()} A GIFT: ${c.gift.tag} (rarity ${c.gift.r}). React in character: flustered denial, secret delight, and remember it. Gifts raise affection by about ${c.gift.r === 'SSR' ? 2 : 1}.` : ''}
 ${c.daily ? `DAILY QUESTION: sometime this reply or soon, Yui asks the player, in her tsundere way: "${c.daily}". Ask it only once.` : ''}
@@ -206,6 +218,11 @@ GIFTS ALREADY GIVEN: ${S.gifts.length ? S.gifts.slice(-6).join(', ') : 'none'}. 
 STORY SO FAR (long-term memory, treat as true): ${S.storyFacts.length ? S.storyFacts.join(' | ') : 'nothing yet'}
 ${G.promptExtra ? G.promptExtra(c) : ''}
 
+INITIATIVE: the character the player is talking to (normally Yui) LEADS the scene and is not an answering machine. In most replies she should move things forward herself: ask the player something about their life, propose a plan or a place, offer something (a bento, notes, a dare), bring up a topic of her own, or call out what the player is doing. Never end two replies in a row with the same kind of question. If the player gives a lazy one-word answer, tease them and take over the conversation.
+${S.talk ? '' : `YUI'S LIFE (topics she may raise): ${G.YUI_LIFE}`}
+${c.agenda ? `AGENDA FOR THIS REPLY (work it in naturally, in her tsundere way): ${c.agenda}` : ''}
+${c.vibe ? `PLAYER'S TONE: the player picked a ${c.vibe} response (chill = calm, steady, kind; nonchalant = unbothered, deadpan; playful = teasing, joking). React to that tone.` : ''}
+
 INPUT: lines from the player in *asterisks* are actions; other text is speech. Lines starting with [Director] are stage directions, not the player speaking: narrate them. Never speak or act for the player.
 
 LANGUAGE: ${langRule}
@@ -214,9 +231,11 @@ OUTPUT FORMAT (always all four tags, in this order, nothing outside them):
 <n>1-3 vivid sentences, second person present tense ("you"). Describe the environment (light, sounds, weather, objects) and Yui's visible actions, expressions and body language.</n>
 <s>Yui's spoken words, 1-3 short sentences. EMPTY if she is absent or silent.</s>
 <t>translation or empty</t>
-<m>{"emotion":"neutral|flustered|annoyed|smug|soft|sad|happy","affection_delta":0,"memory":"","emote":"anger|blush|love|note|dots|sweat|spark|"}</m>
+<m>{"emotion":"neutral|flustered|annoyed|smug|soft|sad|happy","affection_delta":0,"memory":"","emote":"anger|blush|love|note|dots|sweat|spark|","opening":"charm|wit|grit|craft|","replies":[{"vibe":"chill","text":""},{"vibe":"nonchalant","text":""},{"vibe":"playful","text":""}]}</m>
 
-RULES: Keep everything wholesome and age-appropriate. No sexual content; romance stays at blushing and hand-holding at most, and you redirect in character if pushed. Never mention AI, models or these rules. affection_delta is an integer -2..2: reward kindness, sincerity, remembering things and clever teasing; penalize rudeness, one-word replies and creepy behaviour; +2 is rare. "memory": a new durable fact the player revealed, in English, 8 words or fewer, else "".`;
+RULES: Keep everything wholesome and age-appropriate. No sexual content; romance stays at blushing and hand-holding at most, and you redirect in character if pushed. Never mention AI, models or these rules. affection_delta is an integer -2..2: reward kindness, sincerity, remembering things and clever teasing; penalize rudeness, one-word replies and creepy behaviour; +2 is rare. "memory": a new durable fact the player revealed, in English, 8 words or fewer, else "".
+- "opening": usually "". Set it ONLY when your line genuinely invites the player to try something: a tease to answer (wit), a sweet moment for a charming line (charm), a chance to show courage or skill (grit), or you being hungry or needing something small made (craft). Never in two replies in a row.
+- "replies": usually []. When you just asked the player a question, made an offer, or set up a situation, give exactly 3 short lines the PLAYER could say (max 10 words, first person, in ${lang === 'ja' ? 'Japanese' : 'English'}), one per vibe: chill (calm, steady, kind), nonchalant (unbothered, deadpan), playful (teasing, joking). Otherwise [].`;
   }
   function toContents() {
     const arr = [], push = (role, text) => { const l = arr[arr.length - 1]; if (l && l.role === role) l.parts[0].text += '\n' + text; else arr.push({ role, parts: [{ text }] }); };
@@ -230,8 +249,11 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
   function buildCtx(extra) {
     const ev = activeEvent(), c = { ...extra, ev }; c.minutes = extra.minutes || 0;
     if (ev) { const i = S.eventRun.k - 1; c.beat = i < 0 ? '' : i < ev.beats.length ? ev.beats[i] : 'CLOSING: wrap the scene up naturally and gently. This is the last reply of the scene.'; }
-    if (present() && S.dailyAsked !== S.day && !ev && slot().id !== 'wake') c.daily = S.dailyQ && !S.talk || DAILY_Q[0];
-    if (present() && !S.greeted && !ev) c.returning = { away: S.awayDays, streak: S.streak } && !S.talk;
+    if (present() && !S.talk && !ev) {
+      if (S.dailyAsked !== S.day && slot().id !== 'wake') c.daily = S.dailyQ || DAILY_Q[0];
+      if (!S.greeted) c.returning = { away: S.awayDays, streak: S.streak };
+    }
+    if (!ev && !c.gift && !c.daily && !c.returning) c.agenda = G.agenda?.() || '';
     return c;
   }
 
@@ -262,12 +284,18 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
       const m = parseMeta(parsed.m), em = ['neutral', 'flustered', 'annoyed', 'smug', 'soft', 'sad', 'happy'].includes(m.emotion) ? m.emotion : 'neutral';
       let delta = clamp(Math.round(Number(m.affection_delta) || 0), -2, 2); if (S.affection <= 3) delta = Math.min(delta, 1);
       if (c.gift) delta = Math.max(delta, 1);
+      let fit = false;
+      if (c.vibe) { G.addXp(c.vibe, 2); if (!S.talk && FIT[G.moodId()] === c.vibe) { delta = Math.max(delta, 1); fit = true; } }
       if (c.forceDelta != null) delta = c.forceDelta;
       if (S.talk) { G.npcRel(S.talk, delta); delta = 0; }
       const before = G.stageIdx(S.affection); S.affection = clamp(S.affection + delta, 0, 20);
       if (m.memory && !S.memories.includes(m.memory)) S.memories = [String(m.memory).slice(0, 80), ...S.memories].slice(0, 10);
       if (c.daily) S.dailyAsked = S.day; if (c.returning) S.greeted = true;
+      const reps = (Array.isArray(m.replies) ? m.replies : []).filter(r => r && VIBES.includes(r.vibe) && String(r.text || '').trim()).slice(0, 3).map(r => ({ vibe: r.vibe, text: String(r.text).trim().slice(0, 80) }));
+      S.quick = parsed.s.text ? reps : [];
+      S.opening = ['charm', 'wit', 'grit', 'craft'].includes(m.opening) && S.moveCool <= 0 ? m.opening : '';
       S.entries.push({ k: 'y', n: parsed.n.text, s: parsed.s.text, t: parsed.t.text, raw: res.text.slice(0, 1200), who: G.speakerName?.() || 'Yui', em });
+      if (fit) sep(t('vibe_fit'));
       lastSpeech = parsed.s.text || lastSpeech;
       setEmotion(em, m.emote); G.voice(em);
       if (delta > 0) { G.sfx('chime'); G.toast(t('aff_up', delta)); const r = $('#scene', page).getBoundingClientRect(); G.burst(r.left + r.width * .6, r.top + r.height * .35, 4 + delta * 2); }
@@ -290,12 +318,14 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
 
   // ---------- turn runner ----------
   function tick() {
-    const sl = slot(), per = S.eventRun ? 5 : Math.max(3, Math.round((sl.end - sl.start) / sl.turns));
+    const sl = slot(), st = sl.id === 'skip' ? (S.skipStart ?? S.minute) : sl.start;
+    const per = S.eventRun ? 5 : Math.max(5, Math.round((sl.end - st) / sl.turns));
     S.minute = Math.min(S.minute + per, 1439); return per;
   }
   async function run(playerText, ctxIn, direct, extra) {
     if (busy) return G.toast(t('busy'));
-    setBusy(true); box.hidden = true; $('#giftPop', page).hidden = true; let ok = true;
+    setBusy(true); box.hidden = true; $('#giftPop', page).hidden = true; S.quick = []; clearTimeout(idleT); let ok = true;
+    if (playerText) nudges = 0;
     try {
       let c = ctxIn;
       if (!c) {
@@ -307,25 +337,43 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
       updateScene(); ok = await yuiTurn(c);
     } finally { setBusy(false); }
     if (ok) await after();
+    armIdle();
   }
   const send = (text, extra) => run(text, null, undefined, extra);
   const director = (text, extra) => run(null, null, text, extra);
 
+  // Yui speaks up by herself when the player goes quiet
+  const armIdle = () => { clearTimeout(idleT); if (nudges < 2 && page.classList.contains('show')) idleT = setTimeout(nudge, 45000); };
+  async function nudge() {
+    if (busy || !box.hidden || S.eventRun || S.pendingChoice || document.hidden || !present() || !G.getKey() || !page.classList.contains('show')) return armIdle();
+    nudges++;
+    await director('The player has been silent and idle for a while. Yui notices, calls them out (staring, zoning out), and takes the lead herself: she changes the subject, asks them something, or proposes doing something together.');
+  }
+
   async function after() {
     const sl = slot(), ev = activeEvent();
+    if (S.eventRun && !ev) { S.eventRun = null; G.save(); }
     if (ev) {
-      if (S.eventRun.k === ev.choice.at + 1 && !S.eventRun.picked) { S.eventRun.picked = 'open'; G.save(); return showEventChoice(ev); }
-      if (S.eventRun.k >= ev.beats.length + 2) return finishEvent(ev);
-      return;
+      const er = S.eventRun; er.cdone ||= [];
+      const ci = evChoices(ev).findIndex((ch, i) => ch.at + 1 === er.k && !er.cdone.includes(i));
+      if (ci >= 0) { er.open = ci; G.save(); return showEventChoice(ev, ci); }
+      if (er.k >= ev.beats.length + 2) return finishEvent(ev);
+      return showQuickIfAny();
     }
     if (sl.id !== 'night' && S.minute >= sl.end && !S.pendingChoice) return advance();
     if (sl.choose === 'night' && !S.pendingChoice && !S.phone && S.entries.length) return promptChoice('night');
+    const key = `${S.day}-${S.slot}`;
+    if (!S.pendingChoice && S.slotTurns >= 1 && S.rolledSlot !== key) { // one random-event roll per part of the day
+      S.rolledSlot = key; const nx = G.pickEvent?.('turn'); if (nx) return G.startEvent(nx);
+    }
+    showQuickIfAny();
   }
   G.affect = d => {
     if (!d) return; if (S.talk) { G.npcRel(S.talk, d); return G.save(); } const b = G.stageIdx(S.affection); S.affection = clamp(S.affection + d, 0, 20); G.toast(t('aff_up', d));
     const a = G.stageIdx(S.affection); if (a > b && !S.cgs.includes(a)) { S.cgs.push(a); S.gems += 20; setTimeout(() => G.showCG(a), 900); }
     G.save(); updateScene();
   };
+  function arrive() { const ev = G.pickEvent?.('arrive'); if (!ev) return false; G.startEvent(ev); return true; }
 
   // ---------- choices ----------
   function showChoices(ask, opts) {
@@ -335,19 +383,42 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
       b.style.setProperty('--i', i);
       b.addEventListener('click', () => { box.hidden = true; G.sfx('pop'); o.pick(); }); box.append(b);
     });
-    box.hidden = false; $('#moveBtn', page).disabled = true; scrollEnd();
+    box.hidden = false; $('#moveBtn', page).disabled = true; $('#skipBtn', page).disabled = true; scrollEnd();
   }
-  function showEventChoice(ev) {
-    showChoices(ev.choice.ask[L()], ev.choice.options.map(o => ({
-      label: o[L()] + (o.stat ? ` [${t('st_' + o.stat)}]` : ''),
+  // tappable "how do you respond?" lines that Yui offers. Typing still works.
+  function showQuick(list) {
+    box.innerHTML = `<div class="ask">${esc(t('quick_ask'))}</div>`;
+    list.forEach((r, i) => {
+      const b = el('button', 'choice-btn vibe-' + r.vibe, `<em class="vibe">${esc(t('st_' + r.vibe))}</em> ${esc(r.text)}`); b.type = 'button'; b.style.setProperty('--i', i);
+      b.addEventListener('click', () => { box.hidden = true; S.quick = []; G.sfx('pop'); send(r.text, { vibe: r.vibe }); }); box.append(b);
+    });
+    box.hidden = false; scrollEnd();
+  }
+  const showQuickIfAny = () => { if (S.quick?.length && present() && !S.pendingChoice) showQuick(S.quick); };
+
+  function showEventChoice(ev, ci = 0) {
+    const ch = evChoices(ev)[ci], name = o => o[L()] || o.en;
+    showChoices(ch.ask[L()] || ch.ask.en, ch.options.map(o => ({
+      label: name(o) + (o.stat ? ` [${t('st_' + o.stat)}]` : '') + (o.xp ? ` ✦${Object.keys(o.xp).map(k => t('st_' + k)).join('/')}` : ''),
+      locked: o.req && G.level(o.req.stat) < o.req.lv ? `${t('st_' + o.req.stat)} Lv.${o.req.lv}` : '',
       pick: async () => {
-        let d = o.delta, note = o.note;
+        const er = S.eventRun; let d = o.delta ?? 0, note = o.note || `The player chose: ${o.en}.`;
         if (o.stat) {
-          const res = await G.rollAction(o.stat, { base: o.base ?? .4, label: o[L()] });
-          d = res.tier === 'great' ? o.delta + 1 : res.tier === 'corny' ? Math.min(0, o.delta - 1) : o.delta;
+          const res = await G.rollAction(o.stat, { base: o.base ?? .2, bonus: o.bonus || 0, label: name(o) }); G.addXp(o.stat, 1);
+          d = res.tier === 'great' ? d + 1 : res.tier === 'corny' ? Math.min(0, d - 1) : d;
           note += ` OUTCOME (decided by the game, follow it): ${G.tierNote(res.tier)}`; sep(G.chanceLine(res));
         }
-        S.eventRun.picked = 'yes'; G.affect(d); send(`*${o[L()]}*`, { note });
+        if (o.xp) Object.entries(o.xp).forEach(([k, n]) => G.addXp(k, n));
+        if (o.loc) S.loc = o.loc;
+        if (o.min) S.minute = Math.min(1439, S.minute + o.min);
+        if (o.coins) S.coins = Math.max(0, S.coins + o.coins);
+        if (o.flag) S.flags[o.flag] = S.day;
+        if (o.fact) G.addFact(o.fact);
+        if (o.gift) G.takeGift?.();
+        if (o.quest) { const was = (S.quests[o.quest[0]] || { stage: -1 }).stage; S.quests[o.quest[0]] = { stage: o.quest[1], day: S.day }; G.toast(t(was < 0 ? 'quest_new' : 'quest_up', G.QUESTS[o.quest[0]].title[L()]), 2600); }
+        er.cdone.push(ci); er.open = null;
+        if (o.end) er.k = Math.max(er.k, ev.beats.length + 1);
+        G.affect(d); send(`*${name(o)}*`, { note });
       }
     })));
   }
@@ -359,9 +430,11 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
         S.pendingChoice = null;
         if (o.act === 'sleep') return endDay();
         if (o.act === 'map') return G.openMap();
+        if (o.act === 'skip') return skipClass(kind);
         if (o.act === 'text') { S.phone = true; S.loc = 'bedroom'; updateScene(); return director('The player picks up their phone and texts Yui. Narrate the phone lighting up in her dark room and her reaction to getting a message from the player so late.'); }
-        if (o.skip) return gotoSlot(S.slot + 1, kind === 'map' ? 'The player stays home and lets the hours drift by.' : 'The player says goodbye to Yui and walks home alone. Narrate the parting and the walk.');
-        S.loc = o.loc; updateScene(); director(`Arrival: ${slot().note} The player chooses to go to: ${G.STR.en['loc_' + o.loc]}. Narrate the arrival and Yui's reaction.`);
+        if (o.skip) return gotoSlot(slot().next ?? S.slot + 1, kind === 'map' ? 'The player lets the hours drift by, doing nothing in particular.' : 'The player says goodbye to Yui and walks home alone. Narrate the parting and the walk.');
+        S.loc = o.loc; updateScene(); if (arrive()) return;
+        director(`Arrival: ${slot().note} The player chooses to go to: ${G.STR.en['loc_' + o.loc]}. Narrate the arrival and Yui's reaction.`);
       }
     }));
     showChoices(t('ask_' + kind), opts);
@@ -370,28 +443,57 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
   // ---------- slot flow ----------
   async function gotoSlot(i, note) {
     S.slot = i; const sl = slot(); S.slotTurns = 0; S.minute = Math.max(S.minute, sl.start); S.phone = false;
-    const sep = `— ${G.clock()} · ${t('slot_' + sl.id)} —`; S.entries.push({ k: 's', text: sep }); addSep(sep);
+    const line = `— ${G.clock()} · ${t('slot_' + sl.id)} —`; S.entries.push({ k: 's', text: line }); addSep(line);
     if (sl.loc) S.loc = sl.loc; updateScene();
+    const ev = G.pickEvent?.('start');
+    if (ev) { if (sl.choose && sl.choose !== 'night') S.pendingChoice = sl.choose; return G.startEvent(ev); }
     if (sl.choose && sl.choose !== 'night') return promptChoice(sl.choose);
     await director(note || `Time skip. ${sl.note} Narrate the transition and the new scene.`);
   }
-  const advance = () => (slot().id === 'night' ? null : gotoSlot(S.slot + 1));
+  const advance = () => (slot().id === 'night' ? null : gotoSlot(slot().next ?? S.slot + 1));
   async function endDay() {
     S.day++; S.slot = 0; S.slotTurns = 0; S.minute = 420; S.loc = 'bedroom'; S.phone = false; S.dailyQ = DAILY_Q[(S.day - 1) % DAILY_Q.length]; S.talk = null;
     const r = Math.random(); S.weather = r < .6 ? 'clear' : r < .8 ? 'cloudy' : 'rain'; G.save();
-    const sep = `— ${t('day')} ${S.day} · ${G.clock()} —`; S.entries.push({ k: 's', text: sep }); addSep(sep); updateScene();
+    const line = `— ${t('day')} ${S.day} · ${G.clock()} —`; S.entries.push({ k: 's', text: line }); addSep(line); updateScene();
     await director('A new morning. The player slept and wakes up. Narrate the new day and the weather. Yui is not here yet.' + (G.weekend() ? ' It is the weekend, so no school: narrate a lazy morning and the free day ahead.' : ''));
+  }
+
+  // ---------- skipping class ----------
+  const SKIP_NOTE = {
+    walk: 'The player quietly slips out of class and leaves the school building. Narrate the escape and the strange freedom of an empty street in school hours.',
+    excused: 'The player fakes a stomachache so convincingly that the teacher excuses them for the day. Narrate the performance and stepping out into daylight.',
+    nurse: 'The player fakes a stomachache. The school nurse sees through it, but lets them rest a while and then go. Narrate it.',
+    caught: 'The player tries to sneak out and is caught by a teacher at the gate, who writes their name down for detention tomorrow, then sends them away from class anyway. Narrate it.'
+  };
+  function skipClass(prev) {
+    if (busy || S.eventRun) return;
+    showChoices(t('skip_ask'), [
+      { label: t('skip_walk'), pick: () => doSkip('walk') },
+      { label: `${t('skip_sick')} [${t('st_wit')}]`, pick: async () => { const r = await G.rollAction('wit', { base: .2, label: t('skip_sick') }); G.addXp('wit', 1); sep(G.chanceLine(r)); doSkip(r.tier === 'great' ? 'excused' : r.tier === 'flustered' ? 'nurse' : 'caught'); } },
+      { label: t('skip_stay'), pick: () => (prev ? promptChoice(prev) : setBusy(false)) }
+    ]);
+  }
+  async function doSkip(how) {
+    S.skips++; S.skipToday = S.day; S.skipHow = how; S.skipStart = S.minute; S.slot = SLOTS.findIndex(s => s.id === 'skip'); S.slotTurns = 0;
+    S.loc = 'school_gate'; S.phone = false; S.talk = null; S.pendingChoice = null;
+    if (how === 'caught') S.flags.detention = S.day;
+    G.addFact(`Day ${S.day}: the player skipped class${how === 'caught' ? ' and was caught (detention)' : how === 'excused' ? ' with a fake illness' : ''}.`);
+    sep(`— ${G.clock()} · ${t('slot_skip')} —`); updateScene(); G.sfx('pop');
+    await director(SKIP_NOTE[how]);
+    if (!S.eventRun && !S.pendingChoice && slot().id === 'skip') promptChoice('map');
   }
 
   // ---------- events ----------
   G.startEvent = ev => {
     if (busy) return G.toast(t('busy'));
-    G.go('/chat'); if (S.eventRun) return;
+    if (G.route !== '/chat') G.go('/chat');
+    if (S.eventRun) return;
     S.talk = ev.npc || null;
-    S.eventRun = { id: ev.id, k: 0, picked: null, saved: { minute: S.minute, loc: S.loc, weather: S.weather, phone: S.phone, pending: S.pendingChoice } };
-    S.loc = ev.loc; S.minute = ev.time; S.weather = ev.weather || S.weather; S.phone = false; S.pendingChoice = null; box.hidden = true;
-    const s = `— ${t('event_start')}${ev.title[L()]} —`; S.entries.push({ k: 's', text: s }); addSep(s); updateScene(); G.shake();
-    director(`EVENT BEGINS: ${ev.setup} Narrate the opening of the scene and show ${G.speakerName?.() || 'Yui'}'s first reaction.`);
+    S.eventRun = { id: ev.id, k: 0, cdone: [], open: null, saved: { minute: S.minute, loc: S.loc, weather: S.weather, phone: S.phone, pending: S.pendingChoice } };
+    if (ev.loc) S.loc = ev.loc; if (ev.time) S.minute = ev.time; if (ev.weather) S.weather = ev.weather;
+    S.phone = !!ev.phone; S.pendingChoice = null; S.quick = []; box.hidden = true;
+    const s = `— ${t('event_start')}${ev.title[L()] || ev.title.en} —`; S.entries.push({ k: 's', text: s }); addSep(s); updateScene(); G.shake();
+    director(`EVENT BEGINS: ${setupOf(ev)} Narrate the opening of the scene and show ${G.speakerName?.() || 'Yui'}'s first reaction.`);
   };
   G.startNextEvent = () => {
     const ev = G.nextEvent();
@@ -400,11 +502,19 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
     G.startEvent(ev);
   };
   function finishEvent(ev) {
-    S.eventsDone.push(ev.id); S.gems += 10; S.coins += 20; if (ev.npc) G.npcRel(ev.npc, 2); S.talk = null; const sv = S.eventRun.saved; S.eventRun = null;
-    S.minute = sv.minute; S.loc = sv.loc; S.weather = sv.weather; S.phone = sv.phone; G.save();
-    G.toast(t('event_clear', ev.title[L()]), 3200); G.sfx('sparkle'); G.petalBurst(20);
-    const sep = `— ${ev.title[L()]} ✓ —`; S.entries.push({ k: 's', text: sep }); addSep(sep); updateScene();
-    if (sv.pending) promptChoice(sv.pending);
+    const sv = S.eventRun.saved, big = !ev.rep, g = ev.reward?.gems ?? (big ? 10 : 5), c = ev.reward?.coins ?? (big ? 20 : 10);
+    if (!ev.rep) S.eventsDone.push(ev.id); S.evtLast[ev.id] = S.day; S.gems += g; S.coins += c;
+    if (ev.npc) G.npcRel(ev.npc, 2);
+    if (ev.fact) G.addFact(ev.fact);
+    try { ev.done?.(); } catch (e) { console.warn('event done hook failed', e); }
+    S.talk = null; S.eventRun = null;
+    const moved = ev.keepLoc && S.loc !== (ev.loc || sv.loc); // the player really went somewhere during the event
+    S.minute = Math.min(1439, (moved ? S.minute : sv.minute) + (ev.cost ?? (ev.time ? 0 : 20)));
+    if (!moved) S.loc = sv.loc; S.weather = sv.weather; S.phone = sv.phone; G.save();
+    G.toast(t('ev_done', ev.title[L()] || ev.title.en, g, c), 3200); G.sfx('sparkle'); G.petalBurst(20);
+    sep(`— ${ev.title[L()] || ev.title.en} ✓ —`); updateScene();
+    if (sv.pending && !moved) return promptChoice(sv.pending);
+    return after();
   }
 
   // ---------- gifts ----------
@@ -424,14 +534,19 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
   });
 
   // ---------- input ----------
-  $('#composer', page).addEventListener('submit', e => {
+  $('#composer', page).addEventListener('submit', async e => {
     e.preventDefault(); const v = said.value.trim(); if (!v || busy) return;
-    said.value = ''; S.pendingChoice = null; if (S.eventRun?.picked === 'open') S.eventRun.picked = 'skipped'; send(v);
+    S.pendingChoice = null; box.hidden = true;
+    const er = S.eventRun; if (er && er.open != null) { (er.cdone ||= []).push(er.open); er.open = null; }
+    let extra; setBusy(true);
+    try { extra = await G.tryMove?.(v); } catch (err) { console.warn('move check failed', err); } // chat-detected flirt / banter / show-off / snack
+    setBusy(false); said.value = ''; send(v, extra || undefined);
   });
   $('#moveBtn', page).addEventListener('click', () => {
     if (busy || S.eventRun || S.pendingChoice) return;
     if (slot().id === 'night') endDay(); else advance();
   });
+  $('#skipBtn', page).addEventListener('click', () => skipClass());
 
   // ---------- open / close ----------
   async function open() {
@@ -442,15 +557,17 @@ RULES: Keep everything wholesome and age-appropriate. No sexual content; romance
     }
     if (!G.getKey()) return;
     if (!S.intro) { S.intro = true; G.save(); await director('FIRST MORNING (Day 1, 07:00). The player wakes up in their bedroom, a high school student. Yui is a classmate they barely know. Narrate the quiet morning and hint that school (and Yui) awaits. Yui is not here.'); return; }
+    const er = S.eventRun, ev = activeEvent();
     if (S.pendingChoice && box.hidden) promptChoice(S.pendingChoice);
-    else if (S.eventRun?.picked === 'open') showEventChoice(activeEvent());
+    else if (er && ev && er.open != null && box.hidden) showEventChoice(ev, er.open);
+    else if (box.hidden) showQuickIfAny();
+    armIdle();
   }
-  G.pages.story = { show: on => { page.classList.toggle('show', on); if (on) { open(); if (!matchMedia('(pointer: coarse)').matches) setTimeout(() => said.focus(), 50); } } };
+  G.pages.story = { show: on => { page.classList.toggle('show', on); if (on) { open(); if (!matchMedia('(pointer: coarse)').matches) setTimeout(() => said.focus(), 50); } else clearTimeout(idleT); } };
   G.on('lang', () => { labelUi(); updateScene(); });
   G.on('ready', () => { updateScene(); });
   G.on('route', r => { if (r === '/home' && lastSpeech) G.say(lastSpeech.replace(/\n/g, ' ')); });
 
   G.start();
-  const sep = text => { S.entries.push({ k: 's', text }); addSep(text); };
-  G.story = { director, send, update: updateScene, busy: () => busy, slot, present, sep };
+  G.story = { director, send, update: updateScene, busy: () => busy, slot, present, sep, arrive };
 })();

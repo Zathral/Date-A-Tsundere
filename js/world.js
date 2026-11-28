@@ -70,6 +70,7 @@
     let out = `WORLD: the player has ${S.coins} coins. OTHERS HERE: ${names.join(', ') || 'nobody'} (they can be mentioned or walk into the scene, but never speak for them in <s>).`;
     out += '\nCAST RULE: ONLY Yui is a tsundere. Every other character has a clearly different personality and speech style and must NEVER use tsundere habits (stuttering "b-baka", denying obvious feelings, insulting to hide affection).';
     if (S.talk) { const c = CAST[S.talk]; out += `\nSPEAKER: the player is talking to ${c.en}, NOT Yui. ${c.brief} VOICE: ${c.voice[L()]}. Friendliness toward the player: ${S.rel[S.talk] || 0}/10. Put ${c.en}'s words in <s>; affection_delta applies to ${c.en}.`; }
+    if (S.skipToday === S.day) out += '\nTRUANCY: the player skipped school today. Anyone who learns of it may comment, tease, or scold in their own style.';
     return out;
   };
 
@@ -83,15 +84,18 @@
     shopping: { open: [9, 18], acts: [
       { min: 90, pay: [18, 28], need: 'sato', en: 'Help Granny Sato (90 min)', ja: 'サトウばあちゃんを手伝う（90分）', prompt: 'The player helps Granny Sato stock shelves and mind the register. Narrate the work.' }] },
     library: { open: [9, 18], acts: [
+      { train: 'nonchalant', min: 40, en: 'Practice a poker face (40 min) · Nonchalant', ja: 'ポーカーフェイスの練習（40分）· クール', prompt: 'The player practices staying completely unbothered while reading in the library. Narrate it.' },
       { train: 'wit', min: 60, en: 'Study (1h) · Wit', ja: '勉強する（1時間）· 知恵', prompt: 'The player studies hard at the library. Narrate the session.' },
       { min: 60, pay: [12, 20], en: 'Shelve books (1h)', ja: '本の整理（1時間）', prompt: 'The player volunteers to shelve returned books for a small allowance. Narrate the quiet work.' }] },
     park: { open: [6, 21], acts: [
+      { train: 'playful', min: 40, en: 'Goof around (40 min) · Playful', ja: 'ふざけて遊ぶ（40分）· いたずら', prompt: 'The player goofs around in the park, doing silly bits and games. Narrate it.' },
       { train: 'grit', min: 45, en: 'Jog laps (45 min) · Grit', ja: 'ジョギング（45分）· 根性', prompt: 'The player jogs laps around the park pond. Narrate the effort.' },
       { min: 30, en: 'Take a walk (30 min)', ja: '散歩する（30分）', prompt: 'The player takes a slow walk through the park. Narrate it.' }] },
     riverside: { open: [6, 21], acts: [
       { train: 'charm', min: 45, en: 'Practice lines (45 min) · Charm', ja: 'セリフの練習（45分）· 魅力', prompt: 'The player rehearses charming lines alone by the river, feeling a bit silly. Narrate it.' },
       { min: 30, en: 'Skip stones (30 min)', ja: '水切りをする（30分）', prompt: 'The player skips stones across the river. Narrate it.' }] },
     shrine: { open: [6, 20], acts: [
+      { train: 'chill', min: 40, en: 'Quiet meditation (40 min) · Chill', ja: '静かに瞑想（40分）· まったり', prompt: 'The player sits in quiet meditation at the shrine. Narrate the calm.' },
       { min: 10, cost: 5, en: 'Draw a fortune (5)', ja: 'おみくじ (5)', prompt: () => `The player draws an omikuji fortune: ${['great blessing', 'blessing', 'small blessing', 'a bad omen to tie to the tree'][Math.floor(Math.random() * 4)]}. Narrate it.` },
       { min: 10, en: 'Pray (10 min)', ja: 'お参りする（10分）', prompt: 'The player offers a quiet prayer at the shrine. Narrate the moment.' }] }
   };
@@ -122,14 +126,17 @@
   const tb = $('#storyPage .toolbar');
   tb.insertAdjacentHTML('beforeend', '<button class="chip-btn" id="mapBtn" type="button"></button>');
   tb.insertAdjacentHTML('afterend', '<div class="gift-pop" id="placeBar" hidden></div><div class="gift-pop" id="mapPop" hidden></div>');
-  const canRoam = () => !S.eventRun && !S.phone && ['wam', 'wpm', 'after'].includes(G.story.slot().id);
+  const canRoam = () => !S.eventRun && !S.phone && ['wam', 'wpm', 'after', 'skip'].includes(G.story.slot().id);
   const spend = a => { G.save(); G.renderState(); G.story.update(); G.story.director(a); };
 
   function travel(id) {
     if (G.story.busy()) return G.toast(t('busy'));
     S.pendingChoice = null; S.talk = null; S.loc = id; S.minute = Math.min(1439, S.minute + TRAVEL);
     const who = G.peopleAt(id).map(n => n === 'yui' ? 'Yui' : CAST[n].en);
-    spend(`The player arrives at: ${G.STR.en['loc_' + id]}. ${who.length ? 'Present: ' + who.join(', ') + '.' : 'Nobody the player knows is here.'} Narrate the arrival and the place at this hour, and let anyone present notice the player.`);
+    const a = `The player arrives at: ${G.STR.en['loc_' + id]}. ${who.length ? 'Present: ' + who.join(', ') + '.' : 'Nobody the player knows is here.'} Narrate the arrival and the place at this hour, and let anyone present notice the player.`;
+    G.save(); G.renderState(); G.story.update();
+    if (G.story.arrive()) return; // a random event or quest stage took over
+    G.story.director(a);
   }
   function talk(id) {
     if (G.story.busy()) return G.toast(t('busy'));
@@ -151,23 +158,54 @@
     spend(`${typeof a.prompt === 'function' ? a.prompt() : a.prompt}${extra} (${a.min || 10} minutes pass${pay ? `; the player is paid ${pay} coins` : ''}.)`);
   }
   
-  // ---------- social actions: base chance + minigame + stat decide the reaction ----------
+  // ---------- moves (flirt / banter / show off / snack): detected from normal chat, never buttons ----------
   const SOCIAL = [
-    { stat: 'charm', base: .30, en: 'Flirt', ja: '口説く', note: 'The player tries to sweet-talk {n} with a smooth compliment.' },
-    { stat: 'wit', base: .40, en: 'Banter', ja: '軽口を叩く', note: 'The player trades playful banter with {n}, trying to land a witty line.' },
-    { stat: 'grit', base: .35, en: 'Show off', ja: 'かっこつける', note: 'The player tries to impress {n} with a show of courage or skill.' },
-    { stat: 'craft', base: .40, en: 'Share a homemade snack', ja: '手作りおやつを渡す', note: 'The player offers {n} a snack they made themselves.' }
+    { stat: 'charm', base: .15, en: 'Flirt', ja: '口説く', note: 'The player tries to sweet-talk {n} with a smooth compliment.' },
+    { stat: 'wit', base: .22, en: 'Banter', ja: '軽口を叩く', note: 'The player trades playful banter with {n}, trying to land a witty line.' },
+    { stat: 'grit', base: .18, en: 'Show off', ja: 'かっこつける', note: 'The player tries to impress {n} with a show of courage or skill.' },
+    { stat: 'craft', base: .22, en: 'Share a homemade snack', ja: '手作りおやつを渡す', note: 'The player offers {n} a snack they made themselves.' }
   ];
-  async function social(a) {
-    if (G.story.busy()) return G.toast(t('busy'));
+  // cheap pre-filter so the classifier is only called when the message could be a move
+  const PRE = /\*[^*]{2,}\*|\b(cute|pretty|beautiful|gorgeous|adorable|handsome|date|kiss|hug|blush|blushing|tsundere|watch me|bet|dare|race|challenge|impress|show you|made|baked|cookies?|snack|share|try this|want some|have some|compliment)\b|可愛|かわい|綺麗|きれい|好き|デート|勝負|見てて|作った|焼いた|クッキー|あげる/i;
+  async function classify(text, hint, name) {
+    if (!G.getKey()) return null;
+    const last = [...S.entries].reverse().find(e => e.k === 'y');
+    const prompt = `You are the game master of a wholesome dating sim. Decide if the player's latest message is a deliberate social "move" aimed at ${name}.
+Move types: charm (flirty compliment or sweet-talk), wit (playful banter, teasing, a clever comeback), grit (showing off courage or skill, taking a dare), craft (offering something they made, like food).
+Scene: ${G.STR.en['loc_' + (S.phone ? 'yui_room' : S.loc)]}, ${G.clock()}. ${name} last said: "${(last && last.s) || ''}". ${hint ? `${name} just opened the door to a "${hint}" moment.` : ''}
+Player message: "${text}"
+Return ONLY JSON like {"move":"charm"}. Use "none" for ordinary conversation, answers to questions, small talk, plain statements, anything that is not a clear attempt, or any moment where it would be inappropriate (she is upset, a serious talk).`;
+    for (const model of [...G.MODELS].reverse()) { // lite fallback model first: fast and cheap
+      const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 4500);
+      try {
+        const r = await fetch(`${G.API}/models/${model}:generateContent`, {
+          method: 'POST', signal: ctrl.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': G.getKey() },
+          body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0, maxOutputTokens: 300, responseMimeType: 'application/json' } })
+        });
+        clearTimeout(timer); if (!r.ok) continue;
+        const d = await r.json(), raw = (d.candidates?.[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join('');
+        const mv = String(JSON.parse(raw.replace(/```json|```/g, '')).move || '');
+        return ['charm', 'wit', 'grit', 'craft'].includes(mv) ? mv : null;
+      } catch { clearTimeout(timer); }
+    }
+    return null;
+  }
+  // Called by story.js before every typed message. Returns extra context for send(), or null for a normal reply.
+  G.tryMove = async text => {
+    const opening = S.opening; S.opening = '';                 // Yui can open a "moment" in her last reply
+    const cooling = S.moveCool > 0; if (cooling) S.moveCool--;
+    if (cooling || S.eventRun || !G.story.present() || !(opening || PRE.test(text))) return null;
     const who = S.talk || 'yui', name = who === 'yui' ? 'Yui' : CAST[who].en;
+    const a = SOCIAL.find(x => x.stat === await classify(text, opening, name));
+    if (!a) return null;
+    G.toast(t('moment', t('st_' + a.stat)), 1600);
     const bond = (who === 'yui' ? S.affection / 20 : (S.rel[who] || 0) / 10) * .1 + (who === 'yui' ? ({ happy: .05, annoyed: -.05 }[G.moodId()] || 0) : 0);
     const res = await G.rollAction(a.stat, { base: a.base, bonus: bond, label: a[L()] });
-    G.addXp(a.stat, 1);
-    const delta = { great: 2, flustered: 1, corny: -1 }[res.tier], said = $('#said'), line = said.value.trim(), what = a.note.replace('{n}', name);
-    said.value = ''; G.story.sep(G.chanceLine(res));
-    G.story.send(line || `*${what}*`, { forceDelta: delta, note: `${what} OUTCOME (decided by the game, follow it exactly): ${G.tierNote(res.tier)}` });
-  }
+    G.addXp(a.stat, 1); S.moveCool = 3;
+    const delta = { great: 2, flustered: 1, corny: -1 }[res.tier], what = a.note.replace('{n}', name);
+    G.story.sep(G.chanceLine(res));
+    return { forceDelta: delta, note: `${what} OUTCOME (decided by the game, follow it exactly): ${G.tierNote(res.tier)}` };
+  };
   const NPC_EVENTS = G.NPC_EVENTS = [
     { id: 'mika_rush', npc: 'mika', rel: 3, loc: 'cafe', time: 750, title: { en: "Mika's Lunch Rush", ja: 'ミカのランチ戦争' },
       setup: "Cafe Komorebi is slammed at lunch and Mika's part-timer called in sick. She asks the player to help on the floor.",
@@ -213,7 +251,6 @@
       const target = S.talk || (G.story.present() ? 'yui' : null);
       folks.forEach(id => id !== S.talk && btns.push([t('talk_to', id === 'yui' ? 'Yui' : CAST[id].en), () => talk(id)]));
       if (S.talk && G.yuiHere() && !folks.includes('yui')) btns.push([t('talk_to', 'Yui'), () => talk('yui')]);
-      if (target) SOCIAL.forEach(a => btns.push([`${a[L()]} · ${t('st_' + a.stat)}`, () => social(a), 'alt']));
       NPC_EVENTS.forEach(ev => { if (!S.eventsDone.includes(ev.id) && (S.rel[ev.npc] || 0) >= ev.rel && G.where(ev.npc) === S.loc) btns.push(['★ ' + ev.title[L()], () => G.startEvent(ev), 'alt']); });
       if (p && h >= p.open[0] && h < p.open[1]) {
         p.acts.filter(a => !a.need || G.where(a.need) === S.loc).forEach(a => btns.push([a[L()], () => act(a)]));

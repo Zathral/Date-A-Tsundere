@@ -136,7 +136,7 @@
   // chance = base + minigame*30% + stat*4% + bond/mood
   G.rollAction = async (stat, o = {}) => {
     const m = await G.playMini(POOLS[stat], o.label), lvl = G.level(stat);
-    const parts = { base: o.base ?? .3, game: m * .3, stat: lvl * .04, bonus: o.bonus || 0 };
+    const parts = { base: o.base ?? .15, game: m * .3, stat: lvl * .04, bonus: o.bonus || 0 };
     const p = clamp(parts.base + parts.game + parts.stat + parts.bonus, .05, .95), r = Math.random();
     return { tier: r < p ? 'great' : r < p + (1 - p) * .55 ? 'flustered' : 'corny', p, m, lvl, parts };
   };
